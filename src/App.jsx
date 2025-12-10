@@ -6,7 +6,7 @@ function App() {
   
   return (
     <div className="app-container">
-      <header class="navbar">
+      <header className="navbar">
         <h1>Lifting Tracker</h1>
       </header>
     
