@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import './App.css'
-import WorkoutCard from './WorkoutCard.jsx'
+import WorkoutList from './WorkoutList.jsx'
 
 function App() {
   
@@ -11,8 +11,7 @@ function App() {
       </header>
     
       <main className='content'>
-        <WorkoutCard title="Leg Day" date="Dec 9th, 2025" />
-        <WorkoutCard title="Push Day" date="Dec 7th, 2025" /> 
+        <WorkoutList />
       </main>
     </div>
   )

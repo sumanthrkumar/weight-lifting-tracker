@@ -1,25 +1,46 @@
+import WorkoutCard from './WorkoutCard'
+import { useEffect, useState } from 'react'
+import { supabase } from './supabaseClient'
+
 function WorkoutList() {
 
-    //Fake Data to simulate workouts
-    const workouts = [
-        { id: 1, title: "Leg Day", date: "Dec 9th" },
-        { id: 2, title: "Push Day", date: "Dec 7th" },
-        { id: 3, title: "Pull Day", date: "Dec 5th" },
-        { id: 4, title: "Cardio", date: "Dec 4th" }
-    ]   
+    // Start with an empty list of workouts
+    const [workouts, setWorkouts] = useState([])
+
+    //Run this code ONLY when the page first loads
+    useEffect(() => {
+        getWorkouts()
+    }, [])
+
+    //Get data from database
+    async function getWorkouts() {
+        // Select all from 'workouts'
+        const { data, error } = await supabase
+        .from('workouts')
+        .select('*')
+        if (error) {
+            console.error("Error fetching workouts:", error)
+        } else {
+            // If we got data, put it into our State
+            setWorkouts(data)
+        }
+    }
 
     return (
-
         <div className="workout-list">
-            <div className="card">
-                <h3>Leg Day</h3>
-                <p>Last performed on Dec 9th, 2025</p>
-            </div>
+            {workouts.length === 0 && (
+                <p style={{ textAlign: 'center', marginTop: '2rem', color: '#888' }}>
+                No workouts found. Time to hit the gym!
+                </p>
+            )}
 
-            <div className="card">
-                <h3>Push Day</h3>
-                <p>Last performed on Dec 7th, 2025</p>
-            </div>
+            {workouts.map((workout) => (
+                <WorkoutCard 
+                key={workout.id} 
+                title={workout.name}  
+                date={new Date(workout.started_at).toLocaleDateString()} 
+                />
+            ))}
         </div>
     )
 }

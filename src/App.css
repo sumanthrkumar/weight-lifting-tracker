@@ -1,57 +1,75 @@
-#root {
-  max-width: 1280px;
+
+:root {
+  --bg-color: #131314;       /* Deep matte black */
+  --surface-color: #1E1F20;  /* Slightly lighter for cards */
+  --text-primary: #E3E3E3;   /* Soft white for main text */
+  --text-secondary: #A8C7FA; /* Soft Blue for dates/accents */
+  --accent-color: #4c8df6;   /* Brighter blue for interactive elements */
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Roboto', -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-primary);
+  /* Smooth scrolling */
+  scroll-behavior: smooth;
+}
+
+
+.navbar {
+  
+  padding: 2rem 1rem 1rem; 
+  text-align: left; 
+  max-width: 600px;
   margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.navbar h1 {
+  font-size: 2rem;
+  font-weight: 500;
+  background: linear-gradient(90deg, #4c8df6, #98c1fe); 
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.content {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
 
 .card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-/* Card Styling */
-.card {
-  background: white;
-  border-radius: 8px;
+  background-color: var(--surface-color);
+  color: var(--text-primary);
+  
+  border-radius: 24px; 
   padding: 1.5rem;
   margin-bottom: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  border-left: 5px solid #2c3e50; /* A nice accent bar */
-  color: #333;
+  
+  border: 1px solid rgba(255, 255, 255, 0.05); 
+  transition: transform 0.2s ease, background-color 0.2s;
+}
+
+.card:hover {
+  background-color: #2a2b2e;
+  transform: translateY(-2px);
 }
 
 .card h3 {
+  font-size: 1.2rem;
   margin-bottom: 0.5rem;
+  font-weight: 400;
+}
+
+.card p {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
 }
