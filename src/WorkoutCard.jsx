@@ -1,8 +1,8 @@
-function WorkoutCard(properties) {
+function WorkoutCard(props) {
     return (
-        <div className="card">
-            <h3>{properties.title}</h3>
-            <p>Last performed on {properties.date}</p>
+        <div className="card" onClick={props.onCardClick}>
+            <h3>{props.title}</h3>
+            <p>Last performed on {props.date}</p>
         </div>
     )
 }

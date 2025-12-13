@@ -2,7 +2,7 @@ import WorkoutCard from './WorkoutCard'
 import { useEffect, useState } from 'react'
 import { supabase } from './supabaseClient'
 
-function WorkoutList() {
+function WorkoutList({ onWorkoutClick }) {
 
     // Start with an empty list of workouts
     const [workouts, setWorkouts] = useState([])
@@ -52,17 +52,7 @@ function WorkoutList() {
         <div className="workout-list">
             {/* Button to add a new workout */}
             <div style={{ marginBottom: '20px', textAlign: 'center' }}>
-                <button onClick={addNewWorkout}
-                style={{
-                    padding: '12px 24px',
-                    background: '#4c8df6',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50px',
-                    fontSize: '1rem',
-                    cursor: 'pointer'
-                }}
-                >
+                <button onClick={addNewWorkout} className='add-workout-button'>
                 Add new workout
                 </button>
             </div>
@@ -75,9 +65,10 @@ function WorkoutList() {
 
             {workouts.map((workout) => (
                 <WorkoutCard 
-                key={workout.id} 
-                title={workout.name}  
-                date={new Date(workout.started_at).toLocaleDateString()} 
+                    key={workout.id} 
+                    title={workout.name}  
+                    date={new Date(workout.started_at).toLocaleDateString()}
+                    onCardClick={() => onWorkoutClick(workout)}
                 />
             ))}
         </div>
