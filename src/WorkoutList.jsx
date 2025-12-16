@@ -56,10 +56,10 @@ function WorkoutList({ onWorkoutClick }) {
 
         if (!confirm("Are you sure? This will delete all exercises for this workout.")) return
 
-        // 1. Delete all exercises belonging to this workout first (Safety Step)
+        // Delete all exercises belonging to this workout first 
         await supabase.from('exercises').delete().eq('workout_id', id)
 
-        // 2. Now delete the workout itself
+        // Now delete the workout itself
         const { error } = await supabase.from('workouts').delete().eq('id', id)
 
         if (error) {
@@ -113,12 +113,8 @@ function WorkoutList({ onWorkoutClick }) {
 
             {workouts.map((workout) => (
                 <div key={workout.id} style={{position: 'relative'}}>
-                    {/* If we are editing this one, show a FORM. 
-                        Otherwise, show the CARD 
-                    */}
-                    
+                    {/* If we are editing this one, show a FORM. Otherwise, show the CARD */}
                     {editingId === workout.id ? (
-                        // --- EDIT MODE ---
                         <div className="card" style={{display: 'flex', gap: '10px', alignItems: 'center', justifyContent: 'center'}}>
                             <input 
                                 value={editName} 
@@ -130,7 +126,6 @@ function WorkoutList({ onWorkoutClick }) {
                             <button onClick={cancelEdit} className="delete-button" style={{backgroundColor: '#999'}}>Cancel</button>
                         </div>
                     ) : (
-                        // --- VIEW MODE ---
                         // We wrap the Card in a div so we can put buttons on top of it
                         <div 
                             className="card-container" 
@@ -142,7 +137,6 @@ function WorkoutList({ onWorkoutClick }) {
                                 onCardClick={() => onWorkoutClick(workout)}
                             />
                             
-                            {/* Floating Action Buttons */}
                             <div style={{
                                 position: 'absolute', 
                                 right: '15px', 
