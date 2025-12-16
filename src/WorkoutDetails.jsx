@@ -11,6 +11,8 @@ function WorkoutDetails({ workout, onBack }) {
     const [weight, setWeight] = useState('')
     const [reps, setReps] = useState('')
     const [sets, setSets] = useState('')
+    const [editingId, setEditingId] = useState(null)
+    const [editValues, setEditValues] = useState({ name: '', weight: '', sets: '', reps: '' })
 
     useEffect(() => {
         getExercises()
@@ -75,6 +77,42 @@ function WorkoutDetails({ workout, onBack }) {
         }
     }
 
+    function startEditing(exercise) {
+        setEditingId(exercise.id)
+        setEditValues({
+            name: exercise.name,
+            weight: exercise.weight,
+            sets: exercise.sets,
+            reps: exercise.reps
+        })
+    }
+
+    async function saveEdit() {
+        const { error } = await supabase
+            .from('exercises')
+            .update(editValues)
+            .eq('id', editingId)
+
+        if (error) {
+            alert("Error updating exercise")
+        } else {
+            // Update the list on screen without fetching from DB again
+            setExercises(exercises.map(e => 
+                e.id === editingId ? { ...e, ...editValues } : e
+            ))
+            setEditingId(null) // Exit edit mode
+        }
+    }
+
+    function cancelEdit() {
+        setEditingId(null) // Exit edit mode without
+    }
+
+    const totalVolume = exercises.reduce((total, exercise) => {
+        const volume = exercise.weight * exercise.reps * exercise.sets
+        return total + volume
+    }, 0)
+
     return (
         <div className="details-container">
             <div className="back-button" style={{ marginBottom: '20px' }}>
@@ -82,6 +120,10 @@ function WorkoutDetails({ workout, onBack }) {
             </div>
             
             <h1 style={{textAlign: 'center'}}>{workout.name}</h1>
+
+            <div style={{textAlign: 'center', marginTop: '20px', marginBottom: '20px', fontWeight: 'bold'}}>
+                    Total Volume: {totalVolume.toLocaleString()} lbs
+            </div>
             
             {/* input form */}
             <div className="add-exercise-form" style={{
@@ -134,38 +176,59 @@ function WorkoutDetails({ workout, onBack }) {
             {/* Display exercises list */}
             <div className="exercise-list">
                 {exercises.length === 0 ? (
-                    <p style={{textAlign: 'center', fontStyle: 'italic', color: '#999'}}>
-                        No exercises yet. Add one above!
-                    </p>
+                    <p style={{textAlign: 'center', color: '#999'}}>No exercises yet.</p>
                 ) : (
                     exercises.map((exercise) => (
-                        <div key={exercise.id} className="exercise-item" style={{
-                            borderBottom: '1px solid #eee',
-                            padding: '10px 0',
-                            display: 'flex',
-                            justifyContent: 'space-between'
-                        }}>
-                            <div>
-                                <span style={{fontWeight: 'bold'}}>{exercise.name}</span>
-                                <span>
-                                    {exercise.weight}lbs &bull; {exercise.sets} x {exercise.reps}
-                                </span>
-                            </div>
-
-                            <button 
-                                onClick={() => deleteExercise(exercise.id)}
-                                style={{
-                                    background: '#ff4d4d', 
-                                    color: 'white', 
-                                    border: 'none', 
-                                    padding: '8px 12px', 
-                                    borderRadius: '6px', 
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                Delete
-                            </button>
+                        <div key={exercise.id} className="exercise-item" style={{ borderBottom: '1px solid #eee', padding: '10px 0' }}>
+                            
+                            {/* IF we are editing this exercise, show inputs */}
+                            {editingId === exercise.id ? (
+                                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center', width: '100%' }}>
+                                    <input 
+                                        value={editValues.name} 
+                                        onChange={(e) => setEditValues({...editValues, name: e.target.value})}
+                                        style={{padding: '5px', flex: 2}} 
+                                    />
+                                    <input 
+                                        type="number" value={editValues.weight} 
+                                        onChange={(e) => setEditValues({...editValues, weight: e.target.value})}
+                                        style={{padding: '5px', width: '50px'}} 
+                                    />
+                                    <input 
+                                        type="number" value={editValues.sets} 
+                                        onChange={(e) => setEditValues({...editValues, sets: e.target.value})}
+                                        style={{padding: '5px', width: '40px'}} 
+                                    />
+                                    <input 
+                                        type="number" value={editValues.reps} 
+                                        onChange={(e) => setEditValues({...editValues, reps: e.target.value})}
+                                        style={{padding: '5px', width: '40px'}} 
+                                    />
+                                    <button onClick={saveEdit} style={{background: '#4CAF50', color: 'white', border: 'none', padding: '5px 10px', cursor: 'pointer', borderRadius: '4px'}}>Save</button>
+                                    <button onClick={cancelEdit} style={{background: '#9e9e9e', color: 'white', border: 'none', padding: '5px 10px', cursor: 'pointer', borderRadius: '4px'}}>Cancel</button>
+                                </div>
+                            ) : (
+                                /* ELSE show normal text */
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                                    <div>
+                                        <span style={{fontWeight: 'bold'}}>{exercise.name} </span>
+                                        <span>{exercise.weight}lbs &bull; {exercise.sets} x {exercise.reps}</span>
+                                    </div>
+                                    <div>
+                                        <button 
+                                            onClick={() => startEditing(exercise)} className='edit-button'
+                                        >
+                                            Edit
+                                        </button>
+                                        <button 
+                                            onClick={() => deleteExercise(exercise.id)}
+                                            className='delete-button'
+                                        >
+                                            Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ))
                 )}

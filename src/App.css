@@ -83,3 +83,28 @@ body {
   font-size: 1rem;
   cursor: pointer;
 }
+
+.delete-button {
+  background-color: #ff4d4d; 
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px; 
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.edit-button {
+  background-color: #2196F3; /* Bright Blue */
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+  margin-right: 10px; /* Pushes the Delete button away */
+}
+
+.edit-button:hover {
+  background-color: #0b7dda; /* Slightly darker blue on hover */
+}
