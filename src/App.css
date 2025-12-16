@@ -108,3 +108,12 @@ body {
 .edit-button:hover {
   background-color: #0b7dda; /* Slightly darker blue on hover */
 }
+
+.input-box { 
+  width: 100%;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  font-size: 16px;
+}
