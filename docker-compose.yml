@@ -1,0 +1,21 @@
+services:
+  api:
+    build: .
+    container_name: weight_lifting_tracker_api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Absolute path to the database file inside the container
+      - DATABASE_URL=sqlite:////app/data/weight_tracker.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      # Named volume stored inside native POSIX Linux filesystem
+      - sqlite_data:/app/data
+      # Mount application code for live backend updates
+      - ./app:/app/app
+      # Mount client directory for immediate live frontend static updates
+      - ./client:/app/client:ro
+
+volumes:
+  sqlite_data:

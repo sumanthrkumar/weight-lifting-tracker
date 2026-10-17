@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#161616">
+  <title>Weightlifting Tracker</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="device-frame">
+    <div id="app">
+      
+      <!-- Top Global Status Bar -->
+      <header class="app-header">
+        <div class="header-left">
+          <button id="btn-back" class="icon-btn hidden" aria-label="Back">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+          </button>
+          <div class="header-titles">
+            <h1 id="page-title">Workout Overview</h1>
+            <span id="page-subtitle" class="page-subtitle hidden"></span>
+          </div>
+        </div>
+        
+        <div class="header-right">
+          <div id="global-rest-pill" class="rest-pill-header hidden" title="Rest Timer Active">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="global-rest-time">00:00</span>
+          </div>
+          <div id="timer-badge" class="timer-badge hidden">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span id="timer-display">00:00:00</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Floating Toast Notification -->
+      <div id="toast-notification" class="toast-notification" aria-live="polite">
+        <div class="toast-content">
+          <span class="toast-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+          </span>
+          <span id="toast-message" class="toast-message">Saved successfully</span>
+        </div>
+      </div>
+
+      <!-- Main Scrollable Content Area -->
+      <main class="main-content">
+        
+        <!-- ============================================== -->
+        <!-- VIEW 1: WORKOUT OVERVIEW (ACTIVE SESSION)      -->
+        <!-- ============================================== -->
+        <section id="view-workout" class="view-panel active">
+          <!-- Active Session Card -->
+          <div class="session-card">
+            <div class="session-card-header">
+              <input type="text" id="session-name-input" class="session-title-input" value="Freeform Workout" placeholder="Workout Name">
+              <div class="session-meta">
+                <span class="session-timer-large">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span id="session-active-timer">00:00:00</span>
+                </span>
+                <span class="status-pill inline">
+                  <span class="status-dot draft"></span>
+                  <span>Local (Draft Mode)</span>
+                </span>
+              </div>
+            </div>
+            
+            <button id="btn-add-exercise" class="btn btn-primary btn-block">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              New Exercise
+            </button>
+          </div>
+
+          <!-- Exercises list in current workout -->
+          <div class="section-label">Session Exercises</div>
+          <div id="workout-exercises-list" class="exercises-container">
+            <!-- Dynamically populated exercise cards -->
+            <div class="empty-state">
+              <p>No exercises added yet. Tap "New Exercise" to begin logging sets.</p>
+            </div>
+          </div>
+
+          <!-- Sticky Finish Workout Button -->
+          <div class="finish-bar">
+            <button id="btn-finish-workout" class="btn btn-secondary btn-block">
+              Finish &amp; Save Session
+            </button>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 2: EXERCISE SET LOGGER                    -->
+        <!-- ============================================== -->
+        <section id="view-logger" class="view-panel">
+          <!-- Sub Navigation Tabs -->
+          <div class="sub-nav">
+            <button class="sub-tab-btn active" data-subtab="track">TRACK</button>
+            <button class="sub-tab-btn" data-subtab="history">HISTORY</button>
+            <button class="sub-tab-btn" data-subtab="graph">GRAPH</button>
+          </div>
+
+          <div id="subtab-track-content">
+            <!-- Active Rest Timer Countdown Card -->
+            <div id="active-rest-card" class="active-rest-card hidden">
+              <div class="rest-card-header">
+                <div class="rest-card-title-group">
+                  <span class="rest-pulse-indicator"></span>
+                  <span id="rest-card-title" class="rest-card-title">Resting</span>
+                </div>
+                <button type="button" id="btn-rest-skip" class="btn-rest-action btn-rest-skip" title="Skip rest">Skip</button>
+              </div>
+              <div class="rest-card-body">
+                <div id="rest-countdown-display" class="rest-countdown-digits">00:00</div>
+                <div class="rest-progress-container">
+                  <div id="rest-progress-bar" class="rest-progress-bar"></div>
+                </div>
+              </div>
+              <div class="rest-card-footer">
+                <button type="button" id="btn-rest-add30" class="btn-rest-action">&plus;30s</button>
+                <button type="button" id="btn-rest-pause" class="btn-rest-action">Pause</button>
+              </div>
+            </div>
+
+            <!-- Rest Target Configuration Bar -->
+            <div class="rest-setting-panel">
+              <div class="rest-setting-header">
+                <div class="rest-setting-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  <span>Rest Target: <strong id="rest-target-label">90s</strong></span>
+                </div>
+                <button type="button" id="btn-start-rest-manual" class="btn-manual-rest" title="Start rest timer">Start Rest</button>
+              </div>
+              <div class="rest-presets-row">
+                <button type="button" class="btn-rest-preset" data-seconds="60">60s</button>
+                <button type="button" class="btn-rest-preset" data-seconds="90">90s</button>
+                <button type="button" class="btn-rest-preset" data-seconds="120">2m</button>
+                <button type="button" class="btn-rest-preset" data-seconds="180">3m</button>
+                <div class="rest-adjust-steppers">
+                  <button type="button" id="btn-rest-adjust-minus" class="rest-stepper-btn" aria-label="Decrease 15s">&minus;15s</button>
+                  <button type="button" id="btn-rest-adjust-plus" class="rest-stepper-btn" aria-label="Increase 15s">&plus;15s</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Exercise Level Notes -->
+            <div class="notes-field-group">
+              <label class="notes-field-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span>Exercise Notes</span>
+              </label>
+              <input type="text" id="input-exercise-notes" class="notes-input" placeholder="e.g. seat height 4, wide grip, 3s pause...">
+            </div>
+
+            <!-- Stepper Form -->
+            <div class="stepper-box">
+              <div class="stepper-group">
+                <label class="stepper-label">WEIGHT (lbs)</label>
+                <div class="stepper-control">
+                  <button id="btn-weight-minus" class="step-btn" aria-label="Decrease Weight">&minus;</button>
+                  <input type="number" id="input-weight" class="step-input" value="135.0" step="2.5" min="0">
+                  <button id="btn-weight-plus" class="step-btn" aria-label="Increase Weight">&plus;</button>
+                </div>
+              </div>
+
+              <div class="stepper-group">
+                <label class="stepper-label">REPS</label>
+                <div class="stepper-control">
+                  <button id="btn-reps-minus" class="step-btn" aria-label="Decrease Reps">&minus;</button>
+                  <input type="number" id="input-reps" class="step-input" value="5" step="1" min="1">
+                  <button id="btn-reps-plus" class="step-btn" aria-label="Increase Reps">&plus;</button>
+                </div>
+              </div>
+
+              <div class="stepper-group">
+                <label class="stepper-label">RIR (Reps in Reserve - Optional)</label>
+                <div class="stepper-control">
+                  <button id="btn-rir-minus" class="step-btn" aria-label="Decrease RIR">&minus;</button>
+                  <input type="number" id="input-rir" class="step-input" value="2" step="1" min="0" max="10">
+                  <button id="btn-rir-plus" class="step-btn" aria-label="Increase RIR">&plus;</button>
+                </div>
+              </div>
+
+              <div class="stepper-group">
+                <label class="stepper-label">SET NOTES (Optional)</label>
+                <input type="text" id="input-set-notes" class="notes-input" placeholder="e.g. explosive concentric, felt smooth...">
+              </div>
+
+              <div class="stepper-actions">
+                <button id="btn-save-set" class="btn btn-primary flex-1">SAVE SET</button>
+                <button id="btn-clear-set" class="btn btn-neutral flex-1">CLEAR</button>
+              </div>
+            </div>
+
+            <!-- Logged Sets Table -->
+            <div class="section-label">Logged Sets</div>
+            <div id="logged-sets-list" class="sets-table">
+              <!-- Dynamically populated logged sets -->
+            </div>
+
+            <!-- AI Coach Card -->
+            <div class="ai-coach-card">
+              <div class="ai-coach-header">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="10" rx="2"></rect>
+                  <circle cx="12" cy="5" r="2"></circle>
+                  <path d="M12 7v4"></path>
+                  <line x1="8" y1="16" x2="8" y2="16"></line>
+                  <line x1="16" y1="16" x2="16" y2="16"></line>
+                </svg>
+                <span>AI Coach Live Feedback</span>
+              </div>
+              <p id="ai-coach-text" class="ai-coach-body">
+                Estimated fatigue: Low. Ready for Set 4? Suggest targeting 140 lbs &times; 5 to keep progressive overload.
+              </p>
+            </div>
+          </div>
+
+          <div id="subtab-history-content" class="hidden">
+            <div id="exercise-past-records" class="past-records-list">
+              <!-- Populated with past sessions for this specific exercise -->
+            </div>
+          </div>
+
+          <div id="subtab-graph-content" class="hidden">
+            <div class="graph-placeholder">
+              <p>Progression trajectory calculated from local historical sets.</p>
+              <div id="progression-summary-box" class="summary-box"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 3: WORKOUT HISTORY                        -->
+        <!-- ============================================== -->
+        <section id="view-history" class="view-panel">
+          <div class="history-header">
+            <span class="section-label">Past Workouts</span>
+            <button id="btn-sync-manual" class="icon-btn-label">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              <span>Sync Server</span>
+            </button>
+          </div>
+          <div id="history-sessions-list" class="history-list">
+            <!-- Populated with past sessions -->
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 4: EXERCISES CATALOG                      -->
+        <!-- ============================================== -->
+        <section id="view-exercises" class="view-panel">
+          <div class="catalog-controls">
+            <input type="text" id="exercise-search" class="search-input" placeholder="Search exercises...">
+            <button id="btn-create-exercise-modal" class="btn btn-primary btn-sm">
+              &plus; New
+            </button>
+          </div>
+          <div class="muscle-filter-chips" id="muscle-chips">
+            <button class="chip active" data-muscle="all">All</button>
+            <button class="chip" data-muscle="Chest">Chest</button>
+            <button class="chip" data-muscle="Back">Back</button>
+            <button class="chip" data-muscle="Shoulders">Shoulders</button>
+            <button class="chip" data-muscle="Biceps">Biceps</button>
+            <button class="chip" data-muscle="Triceps">Triceps</button>
+            <button class="chip" data-muscle="Quads">Quads</button>
+            <button class="chip" data-muscle="Hamstrings">Hamstrings</button>
+            <button class="chip" data-muscle="Glutes">Glutes</button>
+            <button class="chip" data-muscle="Calves">Calves</button>
+            <button class="chip" data-muscle="Core">Core</button>
+          </div>
+          <div id="catalog-list" class="catalog-list">
+            <!-- Populated with exercises -->
+          </div>
+        </section>
+
+        <!-- ============================================== -->
+        <!-- VIEW 5: AI INSIGHTS                            -->
+        <!-- ============================================== -->
+        <section id="view-insights" class="view-panel">
+          <div class="section-label">Intelligent Progression Analysis</div>
+          <div class="insights-container">
+            <div class="insight-card">
+              <h3>Volume &amp; Recovery Status</h3>
+              <p>Weekly volume is on target. Muscle recovery for Chest and Legs is optimal for high-intensity sets today.</p>
+            </div>
+            <div class="insight-card">
+              <h3>Overload Recommendations</h3>
+              <ul class="insight-list" id="overload-list">
+                <li>Squats: Increase to 140.0 lbs for 5 reps</li>
+                <li>Barbell Bench Press: Maintain 185.0 lbs, target 9 reps</li>
+              </ul>
+            </div>
+            <div class="insight-card">
+              <h3>Offline Persistence Diagnostic</h3>
+              <p id="storage-diagnostics">Calculating local records...</p>
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <!-- Bottom Fixed Navigation Bar -->
+      <nav class="bottom-nav">
+        <button id="tab-nav-workout" class="nav-item active" data-view="view-workout">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 5v14M18 5v14M2 9h4M18 9h4M2 15h4M18 15h4M6 12h12"></path>
+          </svg>
+          <span>Workout</span>
+        </button>
+
+        <button id="tab-nav-history" class="nav-item" data-view="view-history">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+          <span>History</span>
+        </button>
+
+        <button id="tab-nav-exercises" class="nav-item" data-view="view-exercises">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+          <span>Exercises</span>
+        </button>
+
+        <button id="tab-nav-insights" class="nav-item" data-view="view-insights">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="9" y1="18" x2="15" y2="18"></line>
+            <line x1="10" y1="22" x2="14" y2="22"></line>
+            <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
+          </svg>
+          <span>AI Insights</span>
+        </button>
+      </nav>
+
+    </div>
+
+    <!-- Modal: Select Exercise to Add to Workout -->
+    <div id="modal-select-exercise" class="modal-overlay hidden">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2>Select Exercise</h2>
+          <button id="btn-close-select-modal" class="icon-btn">&times;</button>
+        </div>
+        <input type="text" id="modal-exercise-search" class="search-input" placeholder="Search exercises...">
+        <div id="modal-exercise-list" class="modal-list">
+          <!-- Populated from local exercises -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Create New Exercise -->
+    <div id="modal-create-exercise" class="modal-overlay hidden">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2>New Exercise</h2>
+          <button id="btn-close-create-modal" class="icon-btn">&times;</button>
+        </div>
+        <form id="form-create-exercise" class="modal-form">
+          <label>Exercise Name</label>
+          <input type="text" id="create-ex-name" class="form-input" required placeholder="e.g. Romanian Deadlift">
+          
+          <label>Target Muscle Group</label>
+          <select id="create-ex-muscle" class="form-input" required>
+            <option value="Chest">Chest</option>
+            <option value="Back">Back</option>
+            <option value="Shoulders">Shoulders</option>
+            <option value="Biceps">Biceps</option>
+            <option value="Triceps">Triceps</option>
+            <option value="Quads">Quads</option>
+            <option value="Hamstrings">Hamstrings</option>
+            <option value="Glutes">Glutes</option>
+            <option value="Calves">Calves</option>
+            <option value="Core">Core</option>
+            <option value="Other">Other</option>
+          </select>
+
+          <label>Default Equipment</label>
+          <select id="create-ex-equipment" class="form-input">
+            <option value="Barbell">Barbell</option>
+            <option value="Dumbbell">Dumbbell</option>
+            <option value="Cable">Cable</option>
+            <option value="Machine">Machine</option>
+            <option value="Bodyweight">Bodyweight</option>
+            <option value="">None</option>
+          </select>
+
+          <button type="submit" class="btn btn-primary btn-block mt-4">Save Exercise</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Edit Exercise -->
+    <div id="modal-edit-exercise" class="modal-overlay hidden">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2>Edit Exercise</h2>
+          <button id="btn-close-edit-modal" class="icon-btn">&times;</button>
+        </div>
+        <form id="form-edit-exercise" class="modal-form">
+          <input type="hidden" id="edit-ex-id">
+          <label>Exercise Name</label>
+          <input type="text" id="edit-ex-name" class="form-input" required placeholder="e.g. Romanian Deadlift">
+          
+          <label>Target Muscle Group</label>
+          <select id="edit-ex-muscle" class="form-input" required>
+            <option value="Chest">Chest</option>
+            <option value="Back">Back</option>
+            <option value="Shoulders">Shoulders</option>
+            <option value="Biceps">Biceps</option>
+            <option value="Triceps">Triceps</option>
+            <option value="Quads">Quads</option>
+            <option value="Hamstrings">Hamstrings</option>
+            <option value="Glutes">Glutes</option>
+            <option value="Calves">Calves</option>
+            <option value="Core">Core</option>
+            <option value="Other">Other</option>
+          </select>
+
+          <label>Default Equipment</label>
+          <select id="edit-ex-equipment" class="form-input">
+            <option value="Barbell">Barbell</option>
+            <option value="Dumbbell">Dumbbell</option>
+            <option value="Cable">Cable</option>
+            <option value="Machine">Machine</option>
+            <option value="Bodyweight">Bodyweight</option>
+            <option value="Other">Other</option>
+            <option value="">None</option>
+          </select>
+
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button type="button" id="btn-delete-exercise" class="btn btn-danger" style="flex: 1; background: #dc2626; color: #fff; padding: 12px; border-radius: 8px; border: none; font-weight: 600;">Delete</button>
+            <button type="submit" class="btn btn-primary" style="flex: 2;">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="db.js"></script>
+  <script src="sync.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch((err) => {
+          console.warn("ServiceWorker registration failed:", err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

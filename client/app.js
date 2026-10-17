@@ -1,0 +1,1852 @@
+// Rest Timer Manager with Web Audio API chime and Mobile Vibration
+class RestTimerManager {
+  constructor(app) {
+    this.app = app;
+    this.duration = 90;
+    this.remaining = 0;
+    this.interval = null;
+    this.isPaused = false;
+    this.isRunning = false;
+    this.currentExerciseName = "";
+    this.audioCtx = null;
+    this.initAudioUnlock();
+  }
+
+  initAudioUnlock() {
+    const unlock = () => {
+      try {
+        const AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (!this.audioCtx && AudioClass) {
+          this.audioCtx = new AudioClass();
+        }
+        if (this.audioCtx && this.audioCtx.state === "suspended") {
+          this.audioCtx.resume();
+        }
+      } catch (e) {
+        console.warn("Audio context unlock:", e);
+      }
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click", unlock, { passive: true });
+    window.addEventListener("touchstart", unlock, { passive: true });
+  }
+
+  playChime() {
+    try {
+      const AudioClass = window.AudioContext || window.webkitAudioContext;
+      if (!this.audioCtx && AudioClass) {
+        this.audioCtx = new AudioClass();
+      }
+      if (this.audioCtx) {
+        if (this.audioCtx.state === "suspended") {
+          this.audioCtx.resume();
+        }
+        const now = this.audioCtx.currentTime;
+        const playTone = (freq, offset, duration) => {
+          const osc = this.audioCtx.createOscillator();
+          const gain = this.audioCtx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + offset);
+          gain.gain.setValueAtTime(0.28, now + offset);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + duration);
+          osc.connect(gain);
+          gain.connect(this.audioCtx.destination);
+          osc.start(now + offset);
+          osc.stop(now + offset + duration);
+        };
+
+        // Ascending 3-tone chime: D5 (587Hz) -> A5 (880Hz) -> D6 (1174Hz)
+        playTone(587.33, 0.0, 0.18);
+        playTone(880.00, 0.22, 0.22);
+        playTone(1174.66, 0.48, 0.55);
+      }
+    } catch (err) {
+      console.warn("Audio playback not supported:", err);
+    }
+
+    // Trigger haptic vibration on mobile
+    if ("vibrate" in navigator) {
+      try {
+        navigator.vibrate([250, 100, 250, 100, 450]);
+      } catch (err) {
+        // Ignore vibration errors
+      }
+    }
+  }
+
+  start(seconds, exerciseName = "Exercise") {
+    this.stop();
+    this.duration = Math.max(5, seconds);
+    this.remaining = this.duration;
+    this.isPaused = false;
+    this.isRunning = true;
+    this.currentExerciseName = exerciseName;
+
+    const card = document.getElementById("active-rest-card");
+    if (card) {
+      card.classList.remove("hidden", "rest-finished");
+    }
+
+    const title = document.getElementById("rest-card-title");
+    if (title) {
+      title.textContent = `Resting (${exerciseName})`;
+    }
+
+    const pauseBtn = document.getElementById("btn-rest-pause");
+    if (pauseBtn) {
+      pauseBtn.textContent = "Pause";
+    }
+
+    this.updateUI();
+
+    this.interval = setInterval(() => {
+      if (this.isPaused) return;
+
+      this.remaining -= 1;
+      this.updateUI();
+
+      if (this.remaining <= 0) {
+        this.stop();
+        this.onFinish();
+      }
+    }, 1000);
+  }
+
+  addSeconds(secs) {
+    this.remaining = Math.max(0, this.remaining + secs);
+    this.duration = Math.max(this.duration, this.remaining);
+    this.updateUI();
+  }
+
+  togglePause() {
+    this.isPaused = !this.isPaused;
+    const pauseBtn = document.getElementById("btn-rest-pause");
+    if (pauseBtn) {
+      pauseBtn.textContent = this.isPaused ? "Resume" : "Pause";
+    }
+    const card = document.getElementById("active-rest-card");
+    if (card) {
+      card.style.opacity = this.isPaused ? "0.75" : "1";
+    }
+  }
+
+  skip() {
+    this.stop();
+    this.isRunning = false;
+    const card = document.getElementById("active-rest-card");
+    if (card) {
+      card.classList.add("hidden");
+    }
+    const globalPill = document.getElementById("global-rest-pill");
+    if (globalPill) {
+      globalPill.classList.add("hidden");
+    }
+  }
+
+  stop() {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+    }
+    this.isRunning = false;
+  }
+
+  updateUI() {
+    const mins = Math.floor(Math.max(0, this.remaining) / 60);
+    const secs = Math.max(0, this.remaining) % 60;
+    const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+
+    const digits = document.getElementById("rest-countdown-display");
+    if (digits) {
+      digits.textContent = formatted;
+    }
+
+    const globalPill = document.getElementById("global-rest-pill");
+    const globalTime = document.getElementById("global-rest-time");
+    if (globalPill && globalTime) {
+      if (this.app.currentView !== "view-logger") {
+        globalPill.classList.remove("hidden");
+      } else {
+        globalPill.classList.add("hidden");
+      }
+      globalTime.textContent = formatted;
+    }
+
+    const progressBar = document.getElementById("rest-progress-bar");
+    if (progressBar && this.duration > 0) {
+      const pct = Math.max(0, Math.min(100, (this.remaining / this.duration) * 100));
+      progressBar.style.width = `${pct}%`;
+    }
+  }
+
+  onFinish() {
+    this.playChime();
+    this.isRunning = false;
+
+    const digits = document.getElementById("rest-countdown-display");
+    if (digits) digits.textContent = "00:00";
+
+    const progressBar = document.getElementById("rest-progress-bar");
+    if (progressBar) progressBar.style.width = "0%";
+
+    const card = document.getElementById("active-rest-card");
+    if (card) {
+      card.classList.add("rest-finished");
+      const title = document.getElementById("rest-card-title");
+      if (title) title.textContent = "Rest Complete! Ready for next set";
+      setTimeout(() => {
+        card.classList.remove("rest-finished");
+        card.classList.add("hidden");
+      }, 4500);
+    }
+
+    const globalPill = document.getElementById("global-rest-pill");
+    if (globalPill) {
+      globalPill.classList.add("hidden");
+    }
+
+    if (this.app && this.app.showToast) {
+      this.app.showToast(`Rest Finished! Time for your next set of ${this.currentExerciseName}`);
+    }
+  }
+}
+
+class WorkoutApp {
+  constructor() {
+    this.currentView = "view-workout";
+    this.activeSession = null;
+    this.activeLog = null;
+    this.timerInterval = null;
+    this.startTime = null;
+    this.currentFilterMuscle = "all";
+    this.currentExerciseRestSeconds = 90;
+    this.restTimer = new RestTimerManager(this);
+  }
+
+  async init() {
+    await localDB.init();
+    syncManager.init();
+
+    // Clean up duplicates and re-link local logs to canonical IDs
+    await this.deduplicateExercises();
+
+    // Pull catalog from server if connected
+    await syncManager.pullExercises();
+    await syncManager.pullHistory();
+    await syncManager.syncNow();
+
+    // Deduplicate once more after sync and seed defaults if empty
+    await this.deduplicateExercises();
+    await this.seedDefaultExercisesIfEmpty();
+
+    // Restore active workout or create a fresh draft
+    await this.restoreOrCreateActiveSession();
+
+    // Bind event listeners
+    this.bindEvents();
+
+    // Initial render
+    this.populateMuscleGroupDropdowns();
+    this.renderWorkoutOverview();
+    this.renderHistory();
+    this.renderCatalog();
+    this.updateDiagnostics();
+
+    // Restore previous active tab or route from URL hash or localStorage
+    const currentHash = window.location.hash;
+    const HASH_TO_VIEW = {
+      "#workout": "view-workout",
+      "#history": "view-history",
+      "#exercises": "view-exercises",
+      "#insights": "view-insights",
+      "#logger": "view-logger"
+    };
+    const savedView = localStorage.getItem("active_view");
+    const initialView = HASH_TO_VIEW[currentHash] || savedView || "view-workout";
+
+    if (initialView === "view-logger") {
+      const logId = localStorage.getItem("active_log_id");
+      if (logId) {
+        localDB.get("exercise_logs", logId).then((log) => {
+          if (log) {
+            this.openExerciseLogger(log, false);
+          } else {
+            this.switchView("view-workout", false);
+          }
+        }).catch(() => {
+          this.switchView("view-workout", false);
+        });
+      } else {
+        this.switchView("view-workout", false);
+      }
+    } else {
+      this.switchView(initialView, false);
+    }
+
+    // Listen for sync completion events to update UI
+    window.addEventListener("workout-sync-complete", async () => {
+      await this.deduplicateExercises();
+      this.renderHistory();
+      this.renderWorkoutOverview();
+      this.renderCatalog();
+      this.updateDiagnostics();
+    });
+  }
+
+  // Scans local IndexedDB exercises and removes duplicates with identical normalized names,
+  // while safely re-linking existing exercise_logs to the canonical exercise record.
+  async deduplicateExercises() {
+    try {
+      const exercises = await localDB.getAll("exercises");
+      if (!exercises || exercises.length === 0) return;
+
+      const logs = await localDB.getAll("exercise_logs");
+
+      // Canonical UUID lookup map for standard seed exercises
+      const canonicalIds = new Set([
+        "fff977dc-7398-4ce4-8f1c-37b0059d281f", // Barbell Bench Press
+        "bde3755e-bf56-46f4-8b2a-5b6674ec4a13", // Incline Dumbbell Press
+        "d00f2496-de33-4fc2-b79e-d5946ae4236f", // Barbell Squat
+        "f0316b31-551c-49c4-a5f8-26ad69e051fc", // Romanian Deadlift
+        "410d3edd-0652-47b8-9338-88580d0947c3", // Barbell Bent-Over Row
+        "f5aed38f-f2a8-4a7f-ad4f-e63e0dbe4c19", // Lat Pulldown
+        "b7c17920-ff5b-4982-9aa5-9edd44ac0379", // Overhead Dumbbell Press
+        "c85c9de1-8ffe-4d46-b2c2-90ade493f930", // Lateral Raise
+        "84e2224d-1a66-4cb9-82ff-7638b22d4539", // Dumbbell Bicep Curl
+        "88ff7d7c-ea65-4d8e-9120-f7cc04c40479"  // Cable Tricep Pushdown
+      ]);
+
+      // Remove any leftover placeholder "Exercise (uuid)" items
+      for (const ex of exercises) {
+        if (ex.name && ex.name.startsWith("Exercise (")) {
+          await localDB.delete("exercises", ex.id);
+        }
+      }
+
+      // Re-read after placeholder cleanup
+      const activeExercises = await localDB.getAll("exercises");
+
+      // Group exercises by normalized lowercase name
+      const groups = new Map();
+      for (const ex of activeExercises) {
+        if (!ex.name) continue;
+        const key = ex.name.trim().toLowerCase();
+        if (!groups.has(key)) {
+          groups.set(key, []);
+        }
+        groups.get(key).push(ex);
+      }
+
+      for (const [key, group] of groups.entries()) {
+        if (group.length <= 1) continue;
+
+        // Choose canonical record: prioritize known canonical ID, otherwise the first record
+        let canonical = group.find((ex) => canonicalIds.has(ex.id)) || group[0];
+
+        // For all duplicate records, remap foreign keys and delete the duplicate
+        for (const duplicate of group) {
+          if (duplicate.id === canonical.id) continue;
+
+          for (const log of logs) {
+            if (log.exercise_id === duplicate.id) {
+              log.exercise_id = canonical.id;
+              log.exercise_name = canonical.name;
+              await localDB.put("exercise_logs", log);
+            }
+          }
+
+          await localDB.delete("exercises", duplicate.id);
+        }
+      }
+    } catch (err) {
+      console.warn("Could not deduplicate exercises:", err);
+    }
+  }
+
+  // Ensures user has baseline exercises even on first run completely offline
+  async seedDefaultExercisesIfEmpty() {
+    const existing = await localDB.getAll("exercises");
+    if (existing.length === 0) {
+      const defaults = [
+        { id: "fff977dc-7398-4ce4-8f1c-37b0059d281f", name: "Barbell Bench Press", target_muscle_group: "Chest", default_equipment: "Barbell" },
+        { id: "bde3755e-bf56-46f4-8b2a-5b6674ec4a13", name: "Incline Dumbbell Press", target_muscle_group: "Chest", default_equipment: "Dumbbell" },
+        { id: "d00f2496-de33-4fc2-b79e-d5946ae4236f", name: "Barbell Squat", target_muscle_group: "Quads", default_equipment: "Barbell" },
+        { id: "f0316b31-551c-49c4-a5f8-26ad69e051fc", name: "Romanian Deadlift", target_muscle_group: "Hamstrings", default_equipment: "Barbell" },
+        { id: "410d3edd-0652-47b8-9338-88580d0947c3", name: "Barbell Bent-Over Row", target_muscle_group: "Back", default_equipment: "Barbell" },
+        { id: "f5aed38f-f2a8-4a7f-ad4f-e63e0dbe4c19", name: "Lat Pulldown", target_muscle_group: "Back", default_equipment: "Cable" },
+        { id: "b7c17920-ff5b-4982-9aa5-9edd44ac0379", name: "Overhead Dumbbell Press", target_muscle_group: "Shoulders", default_equipment: "Dumbbell" },
+        { id: "c85c9de1-8ffe-4d46-b2c2-90ade493f930", name: "Lateral Raise", target_muscle_group: "Shoulders", default_equipment: "Dumbbell" },
+        { id: "84e2224d-1a66-4cb9-82ff-7638b22d4539", name: "Dumbbell Bicep Curl", target_muscle_group: "Biceps", default_equipment: "Dumbbell" },
+        { id: "88ff7d7c-ea65-4d8e-9120-f7cc04c40479", name: "Cable Tricep Pushdown", target_muscle_group: "Triceps", default_equipment: "Cable" }
+      ];
+      for (const ex of defaults) {
+        await localDB.put("exercises", ex);
+      }
+    } else {
+      // Migrate existing local exercises from coarse 'Arms'/'Legs' to granular groups
+      for (const ex of existing) {
+        let updated = false;
+        if (ex.name === "Dumbbell Bicep Curl" && ex.target_muscle_group === "Arms") {
+          ex.target_muscle_group = "Biceps";
+          updated = true;
+        } else if (ex.name === "Cable Tricep Pushdown" && ex.target_muscle_group === "Arms") {
+          ex.target_muscle_group = "Triceps";
+          updated = true;
+        } else if (ex.name === "Barbell Squat" && ex.target_muscle_group === "Legs") {
+          ex.target_muscle_group = "Quads";
+          updated = true;
+        } else if (ex.name === "Romanian Deadlift" && ex.target_muscle_group === "Legs") {
+          ex.target_muscle_group = "Hamstrings";
+          updated = true;
+        }
+        if (updated) {
+          await localDB.put("exercises", ex);
+        }
+      }
+    }
+  }
+
+  // Restores unfinished session or prepares a new one
+  async restoreOrCreateActiveSession() {
+    const meta = await localDB.get("app_meta", "active_session_id");
+    if (meta && meta.value) {
+      const session = await localDB.getFullSession(meta.value);
+      if (session && session.status === "in_progress") {
+        this.activeSession = session;
+        const hasExercises = session.exercise_logs && session.exercise_logs.length > 0;
+        if (hasExercises && session.started_at) {
+          this.startTime = new Date(session.started_at);
+          this.startTimer();
+        } else {
+          session.started_at = null;
+          await localDB.put("workout_sessions", session);
+          this.startTime = null;
+          this.stopTimer();
+          this.resetTimerDisplay();
+        }
+        return;
+      }
+    }
+
+    // Start fresh in-progress session
+    await this.createNewActiveSession();
+  }
+
+  async createNewActiveSession() {
+    const sessionId = crypto.randomUUID();
+    const newSession = {
+      id: sessionId,
+      name: "Freeform Workout",
+      started_at: null,
+      completed_at: null,
+      session_notes: null,
+      routine_id: null,
+      synced: false,
+      status: "in_progress",
+      exercise_logs: []
+    };
+
+    await localDB.put("workout_sessions", newSession);
+    await localDB.put("app_meta", { key: "active_session_id", value: sessionId });
+
+    this.activeSession = newSession;
+    this.startTime = null;
+    this.stopTimer();
+    this.resetTimerDisplay();
+    await this.renderWorkoutOverview();
+  }
+
+  startTimer() {
+    this.stopTimer();
+
+    const update = () => {
+      if (!this.startTime) return;
+      const elapsedMs = Math.max(0, Date.now() - this.startTime.getTime());
+      const secs = Math.floor((elapsedMs / 1000) % 60);
+      const mins = Math.floor((elapsedMs / (1000 * 60)) % 60);
+      const hours = Math.floor(elapsedMs / (1000 * 60 * 60));
+
+      const fmt = [
+        String(hours).padStart(2, "0"),
+        String(mins).padStart(2, "0"),
+        String(secs).padStart(2, "0")
+      ].join(":");
+
+      const timerEl = document.getElementById("session-active-timer");
+      const badgeTimer = document.getElementById("timer-display");
+      if (timerEl) timerEl.textContent = fmt;
+      if (badgeTimer) badgeTimer.textContent = fmt;
+    };
+
+    update();
+    this.timerInterval = setInterval(update, 1000);
+  }
+
+  stopTimer() {
+    if (this.timerInterval) {
+      clearInterval(this.timerInterval);
+      this.timerInterval = null;
+    }
+  }
+
+  resetTimerDisplay() {
+    const timerEl = document.getElementById("session-active-timer");
+    const badgeTimer = document.getElementById("timer-display");
+    if (timerEl) timerEl.textContent = "00:00:00";
+    if (badgeTimer) badgeTimer.textContent = "00:00:00";
+  }
+
+  bindEvents() {
+    // Bottom Navigation switching
+    document.querySelectorAll(".bottom-nav .nav-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const viewId = btn.getAttribute("data-view");
+        this.switchView(viewId);
+      });
+    });
+
+    // Back button in header (when in logger view)
+    document.getElementById("btn-back").addEventListener("click", () => {
+      const openModal = document.querySelector(".modal-overlay:not(.hidden)");
+      if (openModal) {
+        openModal.classList.add("hidden");
+        return;
+      }
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        this.switchView("view-workout");
+      }
+    });
+
+    // Handle browser back button and mobile swipe gestures
+    window.addEventListener("popstate", async (e) => {
+      // 1. If any modal popup is open, close it and stay on current screen
+      const openModal = document.querySelector(".modal-overlay:not(.hidden)");
+      if (openModal) {
+        openModal.classList.add("hidden");
+        return;
+      }
+
+      // 2. Otherwise navigate to the previous view indicated by hash or state
+      const currentHash = window.location.hash;
+      const HASH_TO_VIEW = {
+        "#workout": "view-workout",
+        "#history": "view-history",
+        "#exercises": "view-exercises",
+        "#insights": "view-insights",
+        "#logger": "view-logger"
+      };
+
+      const targetView = HASH_TO_VIEW[currentHash] || (e.state && e.state.viewId) || "view-workout";
+
+      if (targetView === "view-logger") {
+        const logId = localStorage.getItem("active_log_id");
+        if (logId) {
+          const log = await localDB.get("exercise_logs", logId);
+          if (log) {
+            await this.openExerciseLogger(log, false);
+            return;
+          }
+        }
+        this.switchView("view-workout", false);
+      } else {
+        this.switchView(targetView, false);
+      }
+    });
+
+    // Session name change
+    const nameInput = document.getElementById("session-name-input");
+    nameInput.addEventListener("change", async (e) => {
+      if (this.activeSession) {
+        this.activeSession.name = e.target.value.trim() || "Freeform Workout";
+        await localDB.put("workout_sessions", {
+          id: this.activeSession.id,
+          name: this.activeSession.name,
+          started_at: this.activeSession.started_at,
+          completed_at: this.activeSession.completed_at,
+          session_notes: this.activeSession.session_notes,
+          routine_id: this.activeSession.routine_id,
+          synced: false,
+          status: this.activeSession.status
+        });
+      }
+    });
+
+    // Add Exercise Button (opens modal)
+    document.getElementById("btn-add-exercise").addEventListener("click", () => {
+      this.openSelectExerciseModal();
+    });
+
+    document.getElementById("btn-close-select-modal").addEventListener("click", () => {
+      document.getElementById("modal-select-exercise").classList.add("hidden");
+    });
+
+    // Finish Workout Button
+    document.getElementById("btn-finish-workout").addEventListener("click", async () => {
+      await this.finishActiveSession();
+    });
+
+    // Steppers (+ / -)
+    this.bindStepper("btn-weight-minus", "btn-weight-plus", "input-weight", -2.5, 2.5);
+    this.bindStepper("btn-reps-minus", "btn-reps-plus", "input-reps", -1, 1);
+    this.bindStepper("btn-rir-minus", "btn-rir-plus", "input-rir", -1, 1);
+
+    // Save Set
+    document.getElementById("btn-save-set").addEventListener("click", async () => {
+      await this.saveCurrentSet();
+    });
+
+    // Clear Set
+    document.getElementById("btn-clear-set").addEventListener("click", () => {
+      document.getElementById("input-weight").value = "135.0";
+      document.getElementById("input-reps").value = "5";
+      document.getElementById("input-rir").value = "2";
+      const setNotes = document.getElementById("input-set-notes");
+      if (setNotes) setNotes.value = "";
+    });
+
+    // Exercise Notes Input Listener
+    const exNotesInput = document.getElementById("input-exercise-notes");
+    if (exNotesInput) {
+      exNotesInput.addEventListener("input", async (e) => {
+        if (this.activeLog) {
+          this.activeLog.notes = e.target.value.trim() || null;
+          await localDB.put("exercise_logs", this.activeLog);
+          await this.renderWorkoutOverview();
+        }
+      });
+      exNotesInput.addEventListener("change", () => {
+        this.showToast("Exercise notes saved");
+      });
+    }
+
+    // Rest Timer Preset buttons (60s, 90s, 2m, 3m)
+    document.querySelectorAll(".btn-rest-preset").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const secs = parseInt(btn.getAttribute("data-seconds"), 10);
+        this.saveExerciseRestDuration(secs);
+      });
+    });
+
+    // Rest Timer Stepper Adjusters (-15s / +15s)
+    const restMinusBtn = document.getElementById("btn-rest-adjust-minus");
+    if (restMinusBtn) {
+      restMinusBtn.addEventListener("click", () => {
+        const cur = this.currentExerciseRestSeconds || 90;
+        this.saveExerciseRestDuration(cur - 15);
+      });
+    }
+
+    const restPlusBtn = document.getElementById("btn-rest-adjust-plus");
+    if (restPlusBtn) {
+      restPlusBtn.addEventListener("click", () => {
+        const cur = this.currentExerciseRestSeconds || 90;
+        this.saveExerciseRestDuration(cur + 15);
+      });
+    }
+
+    // Manual start rest timer button
+    const startRestManualBtn = document.getElementById("btn-start-rest-manual");
+    if (startRestManualBtn) {
+      startRestManualBtn.addEventListener("click", () => {
+        const name = this.activeLog ? this.activeLog.exercise_name : "Exercise";
+        this.restTimer.start(this.currentExerciseRestSeconds || 90, name);
+      });
+    }
+
+    // Active Rest Card controls
+    const restSkipBtn = document.getElementById("btn-rest-skip");
+    if (restSkipBtn) {
+      restSkipBtn.addEventListener("click", () => this.restTimer.skip());
+    }
+
+    const restPauseBtn = document.getElementById("btn-rest-pause");
+    if (restPauseBtn) {
+      restPauseBtn.addEventListener("click", () => this.restTimer.togglePause());
+    }
+
+    const restAdd30Btn = document.getElementById("btn-rest-add30");
+    if (restAdd30Btn) {
+      restAdd30Btn.addEventListener("click", () => this.restTimer.addSeconds(30));
+    }
+
+    // Global header rest pill click: navigate back to logger
+    const globalRestPill = document.getElementById("global-rest-pill");
+    if (globalRestPill) {
+      globalRestPill.addEventListener("click", () => {
+        if (this.activeLog) {
+          this.switchView("view-logger");
+        }
+      });
+    }
+
+    // Exercise Sub-tabs (Track / History / Graph)
+    document.querySelectorAll(".sub-tab-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".sub-tab-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const subtab = btn.getAttribute("data-subtab");
+
+        document.getElementById("subtab-track-content").classList.toggle("hidden", subtab !== "track");
+        document.getElementById("subtab-history-content").classList.toggle("hidden", subtab !== "history");
+        document.getElementById("subtab-graph-content").classList.toggle("hidden", subtab !== "graph");
+
+        if (subtab === "history") this.renderExerciseHistoryTab();
+        if (subtab === "graph") this.renderExerciseGraphTab();
+      });
+    });
+
+    // Manual Sync Button in History
+    document.getElementById("btn-sync-manual").addEventListener("click", async () => {
+      await syncManager.pullHistory();
+      await syncManager.syncNow();
+      this.renderHistory();
+      this.updateDiagnostics();
+    });
+
+    // Catalog Search & Filters
+    document.getElementById("exercise-search").addEventListener("input", (e) => {
+      this.renderCatalog(e.target.value);
+    });
+
+    document.querySelectorAll("#muscle-chips .chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll("#muscle-chips .chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        this.currentFilterMuscle = chip.getAttribute("data-muscle");
+        this.renderCatalog(document.getElementById("exercise-search").value);
+      });
+    });
+
+    // Create New Exercise Modal
+    document.getElementById("btn-create-exercise-modal").addEventListener("click", () => {
+      document.getElementById("modal-create-exercise").classList.remove("hidden");
+      history.pushState({ isModal: true }, "");
+    });
+
+    document.getElementById("btn-close-create-modal").addEventListener("click", () => {
+      document.getElementById("modal-create-exercise").classList.add("hidden");
+    });
+
+    document.getElementById("form-create-exercise").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("create-ex-name").value.trim();
+      const muscle = document.getElementById("create-ex-muscle").value;
+      const equipment = document.getElementById("create-ex-equipment").value || null;
+
+      if (!name) return;
+
+      // Verify that an exercise with this name does not already exist
+      const existingList = await localDB.getAll("exercises");
+      const nameLower = name.toLowerCase();
+      const isDuplicate = existingList.some(
+        (ex) => (ex.name || "").trim().toLowerCase() === nameLower
+      );
+      if (isDuplicate) {
+        this.showToast(`Exercise "${name}" already exists`, "error");
+        return;
+      }
+
+      const newEx = {
+        id: crypto.randomUUID(),
+        name: name,
+        target_muscle_group: muscle,
+        default_equipment: equipment
+      };
+
+      await localDB.put("exercises", newEx);
+      document.getElementById("modal-create-exercise").classList.add("hidden");
+      e.target.reset();
+
+      // If online, also send to server
+      if (navigator.onLine) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/exercises`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newEx)
+          });
+          if (res.status === 409) {
+            console.warn("Exercise already exists on server");
+          }
+        } catch (err) {
+          console.warn("Exercise saved locally, server offline:", err);
+        }
+      }
+
+      this.renderCatalog();
+      this.showToast(`Created "${name}"`);
+    });
+
+    // Edit Exercise Modal Close
+    const closeEditBtn = document.getElementById("btn-close-edit-modal");
+    if (closeEditBtn) {
+      closeEditBtn.addEventListener("click", () => {
+        document.getElementById("modal-edit-exercise").classList.add("hidden");
+      });
+    }
+
+    // Edit Exercise Form Submit
+    const editForm = document.getElementById("form-edit-exercise");
+    if (editForm) {
+      editForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const id = document.getElementById("edit-ex-id").value;
+        const name = document.getElementById("edit-ex-name").value.trim();
+        const muscle = document.getElementById("edit-ex-muscle").value;
+        const equipment = document.getElementById("edit-ex-equipment").value || null;
+
+        if (!name || !id) return;
+
+        // Check if renamed to a name that conflicts with another exercise
+        const existingList = await localDB.getAll("exercises");
+        const isDuplicate = existingList.some(
+          (ex) => ex.id !== id && (ex.name || "").trim().toLowerCase() === name.toLowerCase()
+        );
+        if (isDuplicate) {
+          this.showToast(`Exercise "${name}" already exists`, "error");
+          return;
+        }
+
+        const existingEx = await localDB.get("exercises", id);
+        const updatedEx = {
+          ...existingEx,
+          id: id,
+          name: name,
+          target_muscle_group: muscle,
+          default_equipment: equipment
+        };
+
+        await localDB.put("exercises", updatedEx);
+
+        // Update activeLog if currently viewing this exercise
+        if (this.activeLog && this.activeLog.exercise_id === id) {
+          this.activeLog.exercise_name = name;
+        }
+
+        // Also update backend if online
+        if (navigator.onLine) {
+          try {
+            await fetch(`${API_BASE_URL}/exercises/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: name,
+                target_muscle_group: muscle,
+                default_equipment: equipment
+              })
+            });
+          } catch (err) {
+            console.warn("Exercise updated locally, server offline:", err);
+          }
+        }
+
+        document.getElementById("modal-edit-exercise").classList.add("hidden");
+        this.renderCatalog();
+        this.showToast(`Updated "${name}"`);
+      });
+    }
+
+    // Delete Exercise Button
+    const deleteExBtn = document.getElementById("btn-delete-exercise");
+    if (deleteExBtn) {
+      deleteExBtn.addEventListener("click", async () => {
+        const id = document.getElementById("edit-ex-id").value;
+        const name = document.getElementById("edit-ex-name").value.trim();
+        if (!id) return;
+
+        // Check if logs exist for this exercise locally
+        const allLogs = await localDB.getAll("exercise_logs");
+        const hasLogs = allLogs.some((l) => l.exercise_id === id);
+        if (hasLogs) {
+          this.showToast(`Cannot delete "${name}": workout logs reference it`, "error");
+          return;
+        }
+
+        if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+          return;
+        }
+
+        await localDB.delete("exercises", id);
+
+        // Delete from backend if online
+        if (navigator.onLine) {
+          try {
+            await fetch(`${API_BASE_URL}/exercises/${id}`, { method: "DELETE" });
+          } catch (err) {
+            console.warn("Exercise deleted locally, server offline:", err);
+          }
+        }
+
+        document.getElementById("modal-edit-exercise").classList.add("hidden");
+        this.renderCatalog();
+        this.showToast(`Deleted "${name}"`);
+      });
+    }
+  }
+
+  bindStepper(minusId, plusId, inputId, minusDelta, plusDelta) {
+    const input = document.getElementById(inputId);
+    document.getElementById(minusId).addEventListener("click", () => {
+      let val = parseFloat(input.value) || 0;
+      val = Math.max(0, val + minusDelta);
+      input.value = minusDelta % 1 === 0 ? val : val.toFixed(1);
+    });
+    document.getElementById(plusId).addEventListener("click", () => {
+      let val = parseFloat(input.value) || 0;
+      val = val + plusDelta;
+      input.value = plusDelta % 1 === 0 ? val : val.toFixed(1);
+    });
+  }
+
+  switchView(viewId, pushHistory = true) {
+    this.currentView = viewId;
+    localStorage.setItem("active_view", viewId);
+
+    const VIEW_HASHES = {
+      "view-workout": "#workout",
+      "view-history": "#history",
+      "view-exercises": "#exercises",
+      "view-insights": "#insights",
+      "view-logger": "#logger"
+    };
+
+    if (pushHistory) {
+      const hash = VIEW_HASHES[viewId] || "#workout";
+      if (window.location.hash !== hash) {
+        history.pushState({ viewId: viewId }, "", hash);
+      }
+    }
+
+    // Toggle panels
+    document.querySelectorAll(".view-panel").forEach((panel) => {
+      panel.classList.remove("active");
+    });
+    const target = document.getElementById(viewId);
+    if (target) target.classList.add("active");
+
+    // Update bottom nav state
+    document.querySelectorAll(".bottom-nav .nav-item").forEach((btn) => {
+      btn.classList.toggle("active", btn.getAttribute("data-view") === viewId);
+    });
+
+    // Update header navigation and titles
+    const backBtn = document.getElementById("btn-back");
+    const titleEl = document.getElementById("page-title");
+    const subTitleEl = document.getElementById("page-subtitle");
+    const timerBadge = document.getElementById("timer-badge");
+
+    const globalRestPill = document.getElementById("global-rest-pill");
+
+    if (viewId === "view-logger" && this.activeLog) {
+      backBtn.classList.remove("hidden");
+      titleEl.textContent = this.activeLog.exercise_name;
+      subTitleEl.textContent = `${this.activeLog.exercise_name} / Tracker`;
+      subTitleEl.classList.remove("hidden");
+      timerBadge.classList.remove("hidden");
+      if (globalRestPill) globalRestPill.classList.add("hidden");
+      syncManager.updateStatusBadge("Online (Synced)");
+    } else {
+      backBtn.classList.add("hidden");
+      subTitleEl.classList.add("hidden");
+      timerBadge.classList.add("hidden");
+
+      if (globalRestPill && this.restTimer && this.restTimer.isRunning) {
+        globalRestPill.classList.remove("hidden");
+      }
+
+      if (viewId === "view-workout") {
+        titleEl.textContent = "Workout Overview";
+        syncManager.updateStatusBadge("Local (Draft Mode)", true);
+        this.renderWorkoutOverview();
+      } else if (viewId === "view-history") {
+        titleEl.textContent = "Workout History";
+        syncManager.updateStatusBadge();
+        this.renderHistory();
+      } else if (viewId === "view-exercises") {
+        titleEl.textContent = "Exercise Library";
+        syncManager.updateStatusBadge();
+        this.renderCatalog();
+      } else if (viewId === "view-insights") {
+        titleEl.textContent = "AI Insights";
+        syncManager.updateStatusBadge();
+        this.updateDiagnostics();
+      }
+    }
+  }
+
+  // Render list of exercise cards in the active workout
+  async renderWorkoutOverview() {
+    if (!this.activeSession) return;
+
+    const fullSession = await localDB.getFullSession(this.activeSession.id);
+    const container = document.getElementById("workout-exercises-list");
+    container.innerHTML = "";
+
+    const nameInput = document.getElementById("session-name-input");
+    if (nameInput) nameInput.value = fullSession.name || "Freeform Workout";
+
+    if (!fullSession.exercise_logs || fullSession.exercise_logs.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No exercises added yet. Tap "New Exercise" to begin logging sets.</p>
+        </div>
+      `;
+      return;
+    }
+
+    fullSession.exercise_logs.forEach((log) => {
+      const card = document.createElement("div");
+      card.className = "exercise-summary-card";
+
+      const totalSets = log.sets ? log.sets.length : 0;
+      const totalReps = log.sets ? log.sets.reduce((sum, s) => sum + s.reps, 0) : 0;
+      const noteHtml = log.notes
+        ? `<p class="exercise-card-note">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+            <span>${this.escapeHtml(log.notes)}</span>
+          </p>`
+        : "";
+
+      card.innerHTML = `
+        <div class="exercise-card-info">
+          <h4>${log.exercise_name}</h4>
+          <p>${log.exercise_name} &bull; Total: ${totalSets} sets &bull; Total ${totalReps} reps</p>
+          ${noteHtml}
+        </div>
+        <button class="icon-btn" aria-label="Open">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </button>
+      `;
+
+      card.addEventListener("click", () => {
+        this.openExerciseLogger(log);
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  escapeHtml(str) {
+    if (!str) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  showToast(message = "Saved successfully", type = "success", duration = 2400) {
+    const toast = document.getElementById("toast-notification");
+    const msgEl = document.getElementById("toast-message");
+    const contentEl = toast ? toast.querySelector(".toast-content") : null;
+    const iconEl = toast ? toast.querySelector(".toast-icon") : null;
+    if (!toast || !msgEl) return;
+
+    msgEl.textContent = message;
+
+    if (contentEl && iconEl) {
+      if (type === "error") {
+        contentEl.classList.add("toast-error");
+        iconEl.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+        `;
+      } else {
+        contentEl.classList.remove("toast-error");
+        iconEl.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        `;
+      }
+    }
+
+    toast.classList.add("show");
+
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => {
+      toast.classList.remove("show");
+    }, duration);
+  }
+
+  // Opens the exercise set logger (Screen 2 Mockup)
+  async openExerciseLogger(log, pushHistory = true) {
+    this.activeLog = log;
+    localStorage.setItem("active_log_id", log.id);
+    this.switchView("view-logger", pushHistory);
+
+    // Populate exercise-level notes
+    const exerciseNotesInput = document.getElementById("input-exercise-notes");
+    if (exerciseNotesInput) {
+      exerciseNotesInput.value = log.notes || "";
+    }
+
+    // Reset set notes input
+    const setNotesInput = document.getElementById("input-set-notes");
+    if (setNotesInput) {
+      setNotesInput.value = "";
+    }
+
+    // Load saved rest timer duration for this specific exercise
+    try {
+      const exercise = await localDB.get("exercises", log.exercise_id);
+      const savedRest = (exercise && exercise.rest_duration_seconds)
+        ? exercise.rest_duration_seconds
+        : this.getDefaultRestForExercise(exercise ? exercise.name : log.exercise_name);
+
+      this.currentExerciseRestSeconds = savedRest;
+      this.updateRestSettingsUI(savedRest);
+    } catch (e) {
+      this.currentExerciseRestSeconds = 90;
+      this.updateRestSettingsUI(90);
+    }
+
+    await this.renderLoggedSets();
+  }
+
+  getDefaultRestForExercise(name) {
+    if (!name) return 90;
+    const lower = name.toLowerCase();
+    if (lower.includes("squat") || lower.includes("deadlift")) {
+      return 180; // 3 minutes
+    }
+    if (lower.includes("bench") || lower.includes("press") || lower.includes("row")) {
+      return 120; // 2 minutes
+    }
+    return 90; // 90 seconds
+  }
+
+  formatRestDurationLabel(seconds) {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0 && secs > 0) {
+      return `${mins}m ${secs}s`;
+    } else if (mins > 0) {
+      return `${mins}m 00s`;
+    } else {
+      return `${secs}s`;
+    }
+  }
+
+  updateRestSettingsUI(seconds) {
+    const label = document.getElementById("rest-target-label");
+    if (label) {
+      label.textContent = this.formatRestDurationLabel(seconds);
+    }
+
+    // Highlight active preset button if matches exact seconds
+    document.querySelectorAll(".btn-rest-preset").forEach((btn) => {
+      const s = parseInt(btn.getAttribute("data-seconds"), 10);
+      btn.classList.toggle("active", s === seconds);
+    });
+  }
+
+  async saveExerciseRestDuration(seconds) {
+    seconds = Math.max(15, Math.min(600, seconds));
+    this.currentExerciseRestSeconds = seconds;
+    this.updateRestSettingsUI(seconds);
+
+    if (this.activeLog && this.activeLog.exercise_id) {
+      try {
+        const exercise = await localDB.get("exercises", this.activeLog.exercise_id);
+        if (exercise) {
+          exercise.rest_duration_seconds = seconds;
+          await localDB.put("exercises", exercise);
+        }
+      } catch (err) {
+        console.warn("Could not save exercise rest duration:", err);
+      }
+    }
+  }
+
+  async renderLoggedSets() {
+    if (!this.activeLog) return;
+
+    const sets = await localDB.getByIndex("set_entries", "exercise_log_id", this.activeLog.id);
+    sets.sort((a, b) => a.set_number - b.set_number);
+
+    const list = document.getElementById("logged-sets-list");
+    list.innerHTML = "";
+
+    if (sets.length === 0) {
+      list.innerHTML = `<div class="empty-state"><p>No sets logged yet. Select weight and reps, then tap "SAVE SET".</p></div>`;
+      this.updateAICoachCard(0);
+      return;
+    }
+
+    sets.forEach((set) => {
+      const card = document.createElement("div");
+      card.className = "set-item-card";
+
+      const rirText = set.rir !== null && set.rir !== undefined ? `${set.rir} RIR` : "";
+      const noteHtml = set.notes
+        ? `<div class="set-note-preview">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span>${this.escapeHtml(set.notes)}</span>
+          </div>`
+        : "";
+
+      card.innerHTML = `
+        <div class="set-row">
+          <div class="set-row-left">
+            <span class="set-number">${set.set_number}</span>
+          </div>
+          <div class="set-stat">${set.weight.toFixed(1)} lbs</div>
+          <div class="set-stat">${set.reps} reps</div>
+          ${rirText ? `<div class="set-stat rir-stat">${rirText}</div>` : ""}
+          <button class="set-delete-btn" aria-label="Delete set">&times;</button>
+        </div>
+        ${noteHtml}
+      `;
+
+      if (set.notes) {
+        const notePreviewEl = card.querySelector(".set-note-preview");
+        if (notePreviewEl) {
+          notePreviewEl.style.cursor = "pointer";
+          notePreviewEl.title = "Click to edit note";
+          notePreviewEl.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const updated = prompt("Edit set note:", set.notes || "");
+            if (updated !== null) {
+              set.notes = updated.trim() || null;
+              await localDB.put("set_entries", set);
+              await this.renderLoggedSets();
+              this.renderWorkoutOverview();
+            }
+          });
+        }
+      }
+
+      card.querySelector(".set-delete-btn").addEventListener("click", async (e) => {
+        e.stopPropagation();
+        await localDB.delete("set_entries", set.id);
+        await this.renderLoggedSets();
+        this.renderWorkoutOverview();
+      });
+
+      list.appendChild(card);
+    });
+
+    this.updateAICoachCard(sets.length);
+  }
+
+  updateAICoachCard(totalSets) {
+    const textEl = document.getElementById("ai-coach-text");
+    if (!textEl) return;
+
+    if (totalSets === 0) {
+      textEl.textContent = "Warm up appropriately before attempting working sets. Aim for clean execution and a steady tempo.";
+    } else {
+      this.requestAICoachFeedback();
+    }
+  }
+
+  async requestAICoachFeedback() {
+    if (!this.activeLog) return;
+    const textEl = document.getElementById("ai-coach-text");
+    if (!textEl) return;
+
+    textEl.textContent = "Analyzing set performance and calculating fatigue...";
+
+    try {
+      const exercise = await localDB.get("exercises", this.activeLog.exercise_id);
+      const muscleGroup = exercise ? exercise.target_muscle_group : null;
+
+      const sets = await localDB.getByIndex("set_entries", "exercise_log_id", this.activeLog.id);
+      sets.sort((a, b) => a.set_number - b.set_number);
+
+      if (sets.length === 0) {
+        textEl.textContent = "Warm up appropriately before attempting working sets. Aim for clean execution and a steady tempo.";
+        return;
+      }
+
+      const payload = {
+        exercise_name: this.activeLog.exercise_name,
+        target_muscle_group: muscleGroup,
+        exercise_notes: this.activeLog.notes || null,
+        completed_sets: sets.map((s) => ({
+          set_number: s.set_number,
+          weight: s.weight,
+          reps: s.reps,
+          rir: s.rir,
+          completed: s.completed,
+          notes: s.notes
+        }))
+      };
+
+      const res = await fetch("/coach/exercise", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const nextSetNum = sets.length + 1;
+      const targetText = data.suggested_weight && data.suggested_reps
+        ? ` Ready for Set ${nextSetNum}? Target: ${data.suggested_weight} lbs × ${data.suggested_reps} reps.`
+        : "";
+      textEl.textContent = `Estimated fatigue: ${data.fatigue_level}.${targetText} ${data.feedback_message}`;
+
+    } catch (err) {
+      console.warn("AI coach request failed:", err);
+      textEl.textContent = "Maintain form consistency and control your eccentric tempo on the next set.";
+    }
+  }
+
+  async saveCurrentSet() {
+    if (!this.activeLog) return;
+
+    const weight = parseFloat(document.getElementById("input-weight").value) || 0;
+    const reps = parseInt(document.getElementById("input-reps").value, 10) || 1;
+    const rirVal = document.getElementById("input-rir").value;
+    const rir = rirVal !== "" ? parseInt(rirVal, 10) : null;
+    const setNotesInput = document.getElementById("input-set-notes");
+    const setNotes = setNotesInput ? setNotesInput.value.trim() : "";
+
+    const existingSets = await localDB.getByIndex("set_entries", "exercise_log_id", this.activeLog.id);
+    const nextSetNumber = existingSets.length + 1;
+
+    const newSet = {
+      id: crypto.randomUUID(),
+      exercise_log_id: this.activeLog.id,
+      set_number: nextSetNumber,
+      set_type: "normal",
+      weight: weight,
+      reps: reps,
+      rir: rir,
+      completed: true,
+      notes: setNotes.length > 0 ? setNotes : null
+    };
+
+    await localDB.put("set_entries", newSet);
+    if (setNotesInput) {
+      setNotesInput.value = "";
+    }
+    await this.renderLoggedSets();
+    this.renderWorkoutOverview();
+
+    // Button micro-interaction: green checkmark and "SAVED"
+    const saveBtn = document.getElementById("btn-save-set");
+    if (saveBtn) {
+      const originalHtml = saveBtn.innerHTML;
+      saveBtn.classList.add("btn-saved-success");
+      saveBtn.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        <span>SAVED</span>
+      `;
+      setTimeout(() => {
+        saveBtn.classList.remove("btn-saved-success");
+        saveBtn.innerHTML = originalHtml;
+      }, 1200);
+    }
+
+    // Floating toast confirmation
+    this.showToast(`Set ${nextSetNumber} Saved (${weight.toFixed(1)} lbs × ${reps} reps)`);
+
+    // Auto-start custom rest timer for this exercise
+    const restSecs = this.currentExerciseRestSeconds || 90;
+    this.restTimer.start(restSecs, this.activeLog.exercise_name);
+  }
+
+  async renderExerciseHistoryTab() {
+    const container = document.getElementById("exercise-past-records");
+    if (!container || !this.activeLog) return;
+
+    container.innerHTML = `<div class="empty-state"><p>Loading history for ${this.activeLog.exercise_name}...</p></div>`;
+
+    const allSessions = await localDB.getAll("workout_sessions");
+    const completed = allSessions.filter((s) => s.status === "completed");
+
+    let pastSetsFound = [];
+    for (const s of completed) {
+      const logs = await localDB.getByIndex("exercise_logs", "workout_session_id", s.id);
+      for (const l of logs) {
+        if (l.exercise_id === this.activeLog.exercise_id) {
+          const sets = await localDB.getByIndex("set_entries", "exercise_log_id", l.id);
+          if (sets.length > 0) {
+            pastSetsFound.push({ sessionDate: s.started_at, sets });
+          }
+        }
+      }
+    }
+
+    if (pastSetsFound.length === 0) {
+      container.innerHTML = `<div class="empty-state"><p>No previous completed sessions for this exercise.</p></div>`;
+      return;
+    }
+
+    container.innerHTML = "";
+    pastSetsFound.forEach((entry) => {
+      const card = document.createElement("div");
+      card.className = "history-card";
+      const dateStr = new Date(entry.sessionDate).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+
+      card.innerHTML = `
+        <div class="history-card-header">
+          <h3>${dateStr}</h3>
+        </div>
+        <div class="history-card-body">
+          ${entry.sets.map((s) => `Set ${s.set_number}: ${s.weight} lbs &times; ${s.reps} reps`).join("<br>")}
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  renderExerciseGraphTab() {
+    const box = document.getElementById("progression-summary-box");
+    if (box && this.activeLog) {
+      box.innerHTML = `
+        <p><strong>Exercise:</strong> ${this.activeLog.exercise_name}</p>
+        <p><strong>Baseline Overload:</strong> Steady +2.5% volume week-over-week.</p>
+        <p><strong>Fatigue Index:</strong> 1.2 (Optimal Recovery Window)</p>
+      `;
+    }
+  }
+
+  // Completes active workout session and triggers sync
+  async finishActiveSession() {
+    if (!this.activeSession) return;
+
+    const full = await localDB.getFullSession(this.activeSession.id);
+    const hasSets = full.exercise_logs.some((l) => l.sets && l.sets.length > 0);
+
+    if (!hasSets) {
+      const confirmEmpty = confirm("No sets logged in this session. Finish anyway?");
+      if (!confirmEmpty) return;
+    }
+
+    this.activeSession.status = "completed";
+    this.activeSession.completed_at = new Date().toISOString();
+    if (!this.activeSession.started_at) {
+      this.activeSession.started_at = this.activeSession.completed_at;
+    }
+    this.activeSession.synced = false;
+
+    await localDB.put("workout_sessions", this.activeSession);
+    await localDB.delete("app_meta", "active_session_id");
+
+    this.stopTimer();
+    this.resetTimerDisplay();
+    if (this.restTimer) this.restTimer.skip();
+
+    // Trigger immediate background sync to server
+    await syncManager.syncNow();
+
+    // Start a fresh workout draft
+    await this.createNewActiveSession();
+    this.switchView("view-history");
+    this.showToast("Workout saved successfully!");
+  }
+
+  // Render Workout History (Screen 3 Mockup)
+  async renderHistory() {
+    const list = document.getElementById("history-sessions-list");
+    if (!list) return;
+
+    const allSessions = await localDB.getAll("workout_sessions");
+    const completed = allSessions
+      .filter((s) => s.status === "completed")
+      .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+
+    list.innerHTML = "";
+
+    if (completed.length === 0) {
+      list.innerHTML = `<div class="empty-state"><p>No completed workouts in history yet. Finish a workout to view records here.</p></div>`;
+      return;
+    }
+
+    for (const session of completed) {
+      const full = await localDB.getFullSession(session.id);
+      const card = document.createElement("div");
+      card.className = "history-card";
+      card.setAttribute("data-session-id", session.id);
+
+      const dateObj = new Date(session.started_at);
+      const dateDisplay = dateObj.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      });
+
+      let durationStr = "";
+      if (session.completed_at) {
+        const diffMs = new Date(session.completed_at) - new Date(session.started_at);
+        const mins = Math.max(1, Math.round(diffMs / 60000));
+        durationStr = `${mins} min`;
+      }
+
+      const totalSets = full.exercise_logs
+        ? full.exercise_logs.reduce((acc, l) => acc + (l.sets ? l.sets.length : 0), 0)
+        : 0;
+      const totalExercises = full.exercise_logs ? full.exercise_logs.length : 0;
+
+      const summaryMeta = [
+        `${totalExercises} exercise${totalExercises !== 1 ? "s" : ""}`,
+        `${totalSets} set${totalSets !== 1 ? "s" : ""}`,
+        durationStr
+      ].filter(Boolean).join(" &bull; ");
+
+      const exerciseBreakdownHtml = (full.exercise_logs && full.exercise_logs.length > 0)
+        ? full.exercise_logs.map((log) => {
+            const exNotesHtml = log.notes
+              ? `<div class="history-exercise-notes">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>${this.escapeHtml(log.notes)}</span>
+                </div>`
+              : "";
+
+            const setsHtml = (log.sets && log.sets.length > 0)
+              ? log.sets.map((set) => {
+                  const rirText = set.rir !== null && set.rir !== undefined ? `<span class="history-set-rir">${set.rir} RIR</span>` : "";
+                  const setNoteHtml = set.notes
+                    ? `<div class="history-set-note">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        <span>${this.escapeHtml(set.notes)}</span>
+                      </div>`
+                    : "";
+
+                  return `
+                    <div class="history-set-item">
+                      <div class="history-set-main">
+                        <span class="history-set-num">Set ${set.set_number}</span>
+                        <span class="history-set-stat">${set.weight.toFixed(1)} lbs &times; ${set.reps} reps</span>
+                        ${rirText}
+                      </div>
+                      ${setNoteHtml}
+                    </div>
+                  `;
+                }).join("")
+              : `<div class="empty-state" style="padding: 10px 0;"><p>No sets logged</p></div>`;
+
+            return `
+              <div class="history-exercise-section">
+                <div class="history-exercise-header">
+                  <h4>${this.escapeHtml(log.exercise_name)}</h4>
+                  <span class="history-exercise-count">${log.sets ? log.sets.length : 0} sets</span>
+                </div>
+                ${exNotesHtml}
+                <div class="history-sets-table">
+                  ${setsHtml}
+                </div>
+              </div>
+            `;
+          }).join("")
+        : `<div class="empty-state"><p>No exercises recorded for this session.</p></div>`;
+
+      card.innerHTML = `
+        <div class="history-card-header">
+          <div class="history-card-header-left">
+            <h3>${dateDisplay}: ${this.escapeHtml(session.name || "Workout")}</h3>
+            <span class="history-date">${summaryMeta}</span>
+          </div>
+          <div class="history-card-header-right">
+            <span class="status-pill inline">
+              <span class="status-dot ${session.synced ? "online" : "draft"}"></span>
+              <span>${session.synced ? "Synced" : "Local"}</span>
+            </span>
+            <svg class="history-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="history-card-details">
+          ${exerciseBreakdownHtml}
+          <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+            <button class="btn btn-neutral btn-sm history-delete-btn">Delete Workout</button>
+          </div>
+        </div>
+      `;
+
+      card.addEventListener("click", (e) => {
+        if (e.target.closest(".history-delete-btn")) return;
+        card.classList.toggle("expanded");
+      });
+
+      const deleteBtn = card.querySelector(".history-delete-btn");
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", async (e) => {
+          e.stopPropagation();
+          const confirmed = confirm("Are you sure you want to delete this workout?");
+          if (!confirmed) return;
+
+          await localDB.delete("workout_sessions", session.id);
+          if (full.exercise_logs) {
+            for (const log of full.exercise_logs) {
+              await localDB.delete("exercise_logs", log.id);
+              if (log.sets) {
+                for (const set of log.sets) {
+                  await localDB.delete("set_entries", set.id);
+                }
+              }
+            }
+          }
+
+          if (navigator.onLine && session.synced) {
+            try {
+              await fetch(`${API_BASE_URL}/sessions/${session.id}`, { method: "DELETE" });
+            } catch (err) {
+              console.warn("Could not delete session from server:", err);
+            }
+          }
+
+          this.showToast("Workout deleted");
+          await this.renderHistory();
+          this.updateDiagnostics();
+        });
+      }
+
+      list.appendChild(card);
+    }
+  }
+
+  // Render Exercise Catalog
+  async renderCatalog(searchQuery = "") {
+    const list = document.getElementById("catalog-list");
+    if (!list) return;
+
+    const all = await localDB.getAll("exercises");
+    let filtered = all;
+
+    if (this.currentFilterMuscle !== "all") {
+      filtered = filtered.filter((ex) => ex.target_muscle_group === this.currentFilterMuscle);
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter((ex) => ex.name.toLowerCase().includes(q));
+    }
+
+    // Defensive in-memory deduplication by normalized name
+    const seenNames = new Set();
+    filtered = filtered.filter((ex) => {
+      const norm = (ex.name || "").trim().toLowerCase();
+      if (!norm || seenNames.has(norm)) return false;
+      seenNames.add(norm);
+      return true;
+    });
+
+    filtered.sort((a, b) => a.name.localeCompare(b.name));
+    list.innerHTML = "";
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="empty-state"><p>No exercises match your search.</p></div>`;
+      return;
+    }
+
+    filtered.forEach((ex) => {
+      const item = document.createElement("div");
+      item.className = "catalog-item";
+      item.style.cursor = "pointer";
+      item.innerHTML = `
+        <div style="flex: 1;">
+          <div style="font-weight: 600; font-size: 0.9rem;">${this.escapeHtml(ex.name)}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${this.escapeHtml(ex.target_muscle_group)} &bull; ${this.escapeHtml(ex.default_equipment || "Standard")}</div>
+        </div>
+        <button class="btn-edit-catalog-item" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(255, 255, 255, 0.06); color: var(--text-main); font-weight: 600;">Edit</button>
+      `;
+      item.querySelector(".btn-edit-catalog-item").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.openEditExerciseModal(ex);
+      });
+      item.addEventListener("click", () => {
+        this.openEditExerciseModal(ex);
+      });
+      list.appendChild(item);
+    });
+  }
+
+  openEditExerciseModal(exercise) {
+    const modal = document.getElementById("modal-edit-exercise");
+    if (!modal) return;
+
+    document.getElementById("edit-ex-id").value = exercise.id;
+    document.getElementById("edit-ex-name").value = exercise.name || "";
+    document.getElementById("edit-ex-muscle").value = exercise.target_muscle_group || "Other";
+    document.getElementById("edit-ex-equipment").value = exercise.default_equipment || "";
+
+    modal.classList.remove("hidden");
+    history.pushState({ isModal: true }, "");
+  }
+
+  // Modal: Select Exercise to add to Active Workout
+  async openSelectExerciseModal() {
+    const modal = document.getElementById("modal-select-exercise");
+    const list = document.getElementById("modal-exercise-list");
+    const search = document.getElementById("modal-exercise-search");
+
+    modal.classList.remove("hidden");
+    history.pushState({ isModal: true }, "");
+    search.value = "";
+
+    const renderModalItems = async (query = "") => {
+      const all = await localDB.getAll("exercises");
+      let filtered = all;
+      if (query.trim()) {
+        filtered = filtered.filter((ex) => ex.name.toLowerCase().includes(query.toLowerCase()));
+      }
+
+      // Defensive in-memory deduplication by normalized name
+      const seenNames = new Set();
+      filtered = filtered.filter((ex) => {
+        const norm = (ex.name || "").trim().toLowerCase();
+        if (!norm || seenNames.has(norm)) return false;
+        seenNames.add(norm);
+        return true;
+      });
+
+      filtered.sort((a, b) => a.name.localeCompare(b.name));
+
+      list.innerHTML = "";
+      filtered.forEach((ex) => {
+        const item = document.createElement("div");
+        item.className = "modal-list-item";
+        item.innerHTML = `
+          <div>
+            <div style="font-weight: 600; font-size: 0.88rem;">${ex.name}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">${ex.target_muscle_group} &bull; ${ex.default_equipment || "Standard"}</div>
+          </div>
+          <button class="btn btn-primary btn-sm">&plus; Add</button>
+        `;
+
+        item.addEventListener("click", async () => {
+          modal.classList.add("hidden");
+          await this.addExerciseToActiveWorkout(ex);
+        });
+
+        list.appendChild(item);
+      });
+    };
+
+    search.oninput = (e) => renderModalItems(e.target.value);
+    await renderModalItems();
+  }
+
+  async addExerciseToActiveWorkout(exercise) {
+    if (!this.activeSession) return;
+
+    // Start workout session timer on first added exercise if not already active
+    if (!this.activeSession.started_at || !this.startTime) {
+      const nowIso = new Date().toISOString();
+      this.activeSession.started_at = nowIso;
+      this.startTime = new Date(nowIso);
+      await localDB.put("workout_sessions", this.activeSession);
+      this.startTimer();
+    }
+
+    const existingLogs = await localDB.getByIndex("exercise_logs", "workout_session_id", this.activeSession.id);
+    const nextOrder = existingLogs.length;
+
+    const newLog = {
+      id: crypto.randomUUID(),
+      workout_session_id: this.activeSession.id,
+      exercise_id: exercise.id,
+      order_index: nextOrder,
+      notes: null,
+      exercise_name: exercise.name
+    };
+
+    await localDB.put("exercise_logs", newLog);
+    await this.renderWorkoutOverview();
+
+    // Immediately open set logger for the newly added exercise
+    this.openExerciseLogger(newLog);
+  }
+
+  populateMuscleGroupDropdowns() {
+    const groups = [
+      "Chest",
+      "Back",
+      "Shoulders",
+      "Biceps",
+      "Triceps",
+      "Quads",
+      "Hamstrings",
+      "Glutes",
+      "Calves",
+      "Core",
+      "Other"
+    ];
+
+    ["create-ex-muscle", "edit-ex-muscle"].forEach((selectId) => {
+      const select = document.getElementById(selectId);
+      if (select) {
+        const currentVal = select.value;
+        select.innerHTML = groups.map((g) => `<option value="${g}">${g}</option>`).join("");
+        if (currentVal && groups.includes(currentVal)) {
+          select.value = currentVal;
+        }
+      }
+    });
+
+    const chipsContainer = document.getElementById("muscle-chips");
+    if (chipsContainer) {
+      const currentActive = this.currentFilterMuscle || "all";
+      let chipsHtml = `<button class="chip ${currentActive === "all" ? "active" : ""}" data-muscle="all">All</button>`;
+      groups.forEach((g) => {
+        if (g !== "Other") {
+          chipsHtml += `<button class="chip ${currentActive === g ? "active" : ""}" data-muscle="${g}">${g}</button>`;
+        }
+      });
+      chipsContainer.innerHTML = chipsHtml;
+      chipsContainer.querySelectorAll(".chip").forEach((chip) => {
+        chip.addEventListener("click", () => {
+          chipsContainer.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+          chip.classList.add("active");
+          this.currentFilterMuscle = chip.getAttribute("data-muscle");
+          this.renderCatalog(document.getElementById("exercise-search").value);
+        });
+      });
+    }
+  }
+
+  async updateDiagnostics() {
+    const el = document.getElementById("storage-diagnostics");
+    if (!el) return;
+
+    const exercises = await localDB.getAll("exercises");
+    const sessions = await localDB.getAll("workout_sessions");
+    const logs = await localDB.getAll("exercise_logs");
+    const sets = await localDB.getAll("set_entries");
+
+    el.innerHTML = `
+      Local IndexedDB records:<br>
+      &bull; Exercises: ${exercises.length}<br>
+      &bull; Sessions: ${sessions.length} (${sessions.filter((s) => s.synced).length} synced)<br>
+      &bull; Logs: ${logs.length}<br>
+      &bull; Sets: ${sets.length}
+    `;
+  }
+}
+
+const app = new WorkoutApp();
+document.addEventListener("DOMContentLoaded", () => {
+  app.init();
+});

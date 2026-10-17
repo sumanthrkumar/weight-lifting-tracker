@@ -1,0 +1,30 @@
+{
+  "short_name": "Tracker",
+  "name": "Weightlifting Tracker",
+  "id": "/app/",
+  "start_url": "./",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "background_color": "#161616",
+  "theme_color": "#161616",
+  "display": "standalone",
+  "orientation": "portrait"
+}

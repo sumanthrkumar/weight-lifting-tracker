@@ -1,0 +1,236 @@
+// Network Synchronization Manager for Offline-First Data Ingestion
+
+const API_BASE_URL = window.location.origin;
+
+class SyncManager {
+  constructor(db) {
+    this.db = db;
+    this.isOnline = navigator.onLine;
+    this.isSyncing = false;
+  }
+
+  init() {
+    window.addEventListener("online", () => this.handleNetworkChange(true));
+    window.addEventListener("offline", () => this.handleNetworkChange(false));
+    this.updateStatusBadge();
+  }
+
+  handleNetworkChange(isOnline) {
+    this.isOnline = isOnline;
+    this.updateStatusBadge();
+    if (isOnline) {
+      this.syncNow();
+    }
+  }
+
+  updateStatusBadge(statusText = null, isDraft = false) {
+    const badge = document.getElementById("status-badge");
+    const dot = document.getElementById("status-dot");
+    const text = document.getElementById("status-text");
+
+    if (!badge || !text) return;
+
+    if (this.isSyncing) {
+      text.textContent = "Syncing...";
+      if (dot) dot.className = "status-dot syncing";
+      return;
+    }
+
+    if (isDraft) {
+      text.textContent = "Local (Draft Mode)";
+      if (dot) dot.className = "status-dot draft";
+      return;
+    }
+
+    if (statusText) {
+      text.textContent = statusText;
+      return;
+    }
+
+    if (this.isOnline) {
+      text.textContent = "Online (Synced)";
+      if (dot) dot.className = "status-dot online";
+    } else {
+      text.textContent = "Offline (Local)";
+      if (dot) dot.className = "status-dot offline";
+    }
+  }
+
+  // Pull exercise library from server into local IndexedDB and deduplicate by normalized name
+  async pullExercises() {
+    if (!this.isOnline) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/exercises`);
+      if (!response.ok) throw new Error("Failed to fetch exercises");
+
+      const serverExercises = await response.json();
+      const localExercises = await this.db.getAll("exercises");
+      const localLogs = await this.db.getAll("exercise_logs");
+
+      for (const serverEx of serverExercises) {
+        const normName = (serverEx.name || "").trim().toLowerCase();
+
+        // Identify any local exercises with identical normalized names but differing IDs
+        const duplicates = localExercises.filter(
+          (lx) => (lx.name || "").trim().toLowerCase() === normName && lx.id !== serverEx.id
+        );
+
+        for (const dup of duplicates) {
+          // Remap local exercise_logs referencing the duplicate to the canonical server ID
+          for (const log of localLogs) {
+            if (log.exercise_id === dup.id) {
+              log.exercise_id = serverEx.id;
+              log.exercise_name = serverEx.name;
+              await this.db.put("exercise_logs", log);
+            }
+          }
+          // Remove duplicate local exercise record
+          await this.db.delete("exercises", dup.id);
+        }
+
+        // Store canonical exercise record
+        await this.db.put("exercises", serverEx);
+      }
+      return serverExercises;
+    } catch (error) {
+      console.warn("Could not pull exercises from server:", error);
+    }
+  }
+
+  // Pull past workout history from server into local IndexedDB
+  async pullHistory() {
+    if (!this.isOnline) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/sessions`);
+      if (!response.ok) throw new Error("Failed to fetch sessions");
+
+      const sessions = await response.json();
+      for (const session of sessions) {
+        await this.db.put("workout_sessions", {
+          id: session.id,
+          name: session.name,
+          started_at: session.started_at,
+          completed_at: session.completed_at,
+          session_notes: session.session_notes,
+          routine_id: session.routine_id,
+          synced: true,
+          status: "completed"
+        });
+
+        if (session.exercise_logs) {
+          for (const log of session.exercise_logs) {
+            await this.db.put("exercise_logs", {
+              id: log.id,
+              workout_session_id: session.id,
+              exercise_id: log.exercise_id,
+              exercise_name: log.exercise_name || "Exercise",
+              order_index: log.order_index,
+              notes: log.notes
+            });
+
+            if (log.sets) {
+              for (const set of log.sets) {
+                await this.db.put("set_entries", {
+                  id: set.id,
+                  exercise_log_id: log.id,
+                  set_number: set.set_number,
+                  set_type: set.set_type,
+                  weight: set.weight,
+                  reps: set.reps,
+                  rir: set.rir,
+                  completed: set.completed,
+                  notes: set.notes
+                });
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn("Could not pull history from server:", error);
+    }
+  }
+
+  // Push unsynced sessions to POST /sync
+  async syncNow() {
+    if (!this.isOnline || this.isSyncing) return;
+
+    try {
+      this.isSyncing = true;
+      this.updateStatusBadge();
+
+      // Find all completed sessions that are not marked synced
+      const allSessions = await this.db.getAll("workout_sessions");
+      const unsyncedSessions = allSessions.filter(
+        (s) => s.status === "completed" && s.synced === false
+      );
+
+      if (unsyncedSessions.length === 0) {
+        this.isSyncing = false;
+        this.updateStatusBadge("Online (Synced)");
+        return;
+      }
+
+      // Assemble full nested payload for each session
+      const payloadSessions = [];
+      for (const s of unsyncedSessions) {
+        const full = await this.db.getFullSession(s.id);
+        if (full) {
+          payloadSessions.push({
+            id: full.id,
+            name: full.name,
+            started_at: full.started_at,
+            completed_at: full.completed_at,
+            session_notes: full.session_notes,
+            routine_id: full.routine_id,
+            exercise_logs: full.exercise_logs.map((log) => ({
+              id: log.id,
+              exercise_id: log.exercise_id,
+              exercise_name: log.exercise_name || null,
+              order_index: log.order_index,
+              notes: log.notes,
+              sets: log.sets.map((set) => ({
+                id: set.id,
+                set_number: set.set_number,
+                set_type: set.set_type || "normal",
+                weight: set.weight,
+                reps: set.reps,
+                rir: set.rir,
+                completed: set.completed,
+                notes: set.notes
+              }))
+            }))
+          });
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/sync`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessions: payloadSessions })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Sync failed with status: ${response.status}`);
+      }
+
+      // Mark local sessions as synced
+      for (const s of unsyncedSessions) {
+        s.synced = true;
+        await this.db.put("workout_sessions", s);
+      }
+
+      window.dispatchEvent(new CustomEvent("workout-sync-complete"));
+      this.updateStatusBadge("Online (Synced)");
+    } catch (error) {
+      console.warn("Background sync error:", error);
+      this.updateStatusBadge("Sync Pending");
+    } finally {
+      this.isSyncing = false;
+    }
+  }
+}
+
+const syncManager = new SyncManager(localDB);
