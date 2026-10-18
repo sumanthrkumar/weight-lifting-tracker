@@ -86,6 +86,21 @@
               </div>
             </div>
             
+            <!-- Workout Notes & Plan (Feature 5) -->
+            <div class="session-notes-box">
+              <div class="session-notes-header">
+                <label for="session-notes-input" class="session-notes-label">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>WORKOUT NOTES &amp; PLAN</span>
+                </label>
+                <span id="session-notes-status" class="notes-status-badge">Auto-saved</span>
+              </div>
+              <textarea id="session-notes-input" class="session-notes-textarea" placeholder="Add workout goals, planned weights, fatigue, or session notes..." rows="2"></textarea>
+            </div>
+
             <button id="btn-add-exercise" class="btn btn-primary btn-block">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -124,6 +139,14 @@
           <div class="finish-bar">
             <button id="btn-finish-workout" class="btn btn-secondary btn-block">
               Finish &amp; Save Session
+            </button>
+            <button id="btn-preview-workout-ai" class="btn btn-neutral btn-block mt-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 16v-4"></path>
+                <path d="M12 8h.01"></path>
+              </svg>
+              AI Insights for This Workout
             </button>
           </div>
         </section>
@@ -345,23 +368,55 @@
         <!-- VIEW 5: AI INSIGHTS                            -->
         <!-- ============================================== -->
         <section id="view-insights" class="view-panel">
-          <div class="section-label">Intelligent Progression Analysis</div>
-          <div class="insights-container">
-            <div class="insight-card">
-              <h3>Volume &amp; Recovery Status</h3>
-              <p>Weekly volume is on target. Muscle recovery for Chest and Legs is optimal for high-intensity sets today.</p>
+          <div class="insights-view-header">
+            <div class="section-label">AI Workout Coach &amp; Progression</div>
+            <p class="insights-view-subtitle">Select or tap any workout to analyze muscle volume, targets, form cues, and notes.</p>
+          </div>
+
+          <!-- Workout Carousel / Selector Chips -->
+          <div class="insights-selector-section">
+            <div class="insights-selector-top">
+              <span class="insights-selector-label">CHOOSE WORKOUT</span>
+              <span id="insights-total-workouts-count" class="insights-count-badge">0 workouts</span>
             </div>
-            <div class="insight-card">
-              <h3>Overload Recommendations</h3>
-              <ul class="insight-list" id="overload-list">
-                <li>Squats: Increase to 140.0 lbs for 5 reps</li>
-                <li>Barbell Bench Press: Maintain 185.0 lbs, target 9 reps</li>
-              </ul>
+            <div id="insights-workout-selector" class="insights-chips-scroll">
+              <!-- Populated dynamically with active session and completed workouts -->
             </div>
-            <div class="insight-card">
-              <h3>Offline Persistence Diagnostic</h3>
-              <p id="storage-diagnostics">Calculating local records...</p>
+          </div>
+
+          <!-- Analysis Action Bar -->
+          <div id="insights-action-card" class="insights-action-card hidden">
+            <div class="insights-action-info">
+              <h3 id="insights-selected-title">Workout Name</h3>
+              <span id="insights-selected-meta">Date • 0 sets</span>
             </div>
+            <button id="btn-run-insights" class="btn btn-primary btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>Analyze Workout</span>
+            </button>
+          </div>
+
+          <!-- Main Dynamic Insights Results Container -->
+          <div id="insights-results-container" class="insights-results-container">
+            <!-- Dynamically populated or empty state -->
+            <div id="insights-empty-state" class="empty-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-tan); opacity: 0.8; margin-bottom: 8px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
+              </svg>
+              <p>Select a workout above to view intelligent volume breakdown, progression targets, form cues, and notes analysis.</p>
+            </div>
+          </div>
+
+          <!-- Offline & Storage Diagnostics (Subtle footer) -->
+          <div class="insights-diagnostics-card">
+            <div class="diag-header">
+              <span class="diag-title">SYSTEM STATUS</span>
+              <span id="ai-engine-status" class="diag-engine-badge">Engine Ready</span>
+            </div>
+            <p id="storage-diagnostics">Calculating local records...</p>
           </div>
         </section>
 
@@ -505,6 +560,19 @@
             <button type="button" id="btn-delete-exercise" class="btn btn-danger" style="flex: 1; background: #dc2626; color: #fff; padding: 12px; border-radius: 8px; border: none; font-weight: 600;">Delete</button>
             <button type="submit" class="btn btn-primary" style="flex: 2;">Save Changes</button>
           </div>
+        </form>
+    <!-- Modal: Edit Workout Notes -->
+    <div id="modal-edit-workout-notes" class="modal-overlay hidden">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2>Edit Workout Notes</h2>
+          <button id="btn-close-notes-modal" class="icon-btn">&times;</button>
+        </div>
+        <form id="form-edit-workout-notes" class="modal-form">
+          <input type="hidden" id="edit-session-notes-id">
+          <label id="edit-session-notes-title-label">Session Notes &amp; Plan</label>
+          <textarea id="edit-session-notes-text" class="form-input" rows="4" placeholder="Add or update session notes, goals, or reflections..."></textarea>
+          <button type="submit" class="btn btn-primary btn-block mt-4">Save Notes</button>
         </form>
       </div>
     </div>
