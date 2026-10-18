@@ -242,6 +242,7 @@ class WorkoutApp {
     // Deduplicate once more after sync and seed defaults if empty
     await this.deduplicateExercises();
     await this.seedDefaultExercisesIfEmpty();
+    await this.backfillLogMuscleGroups();
 
     // Restore active workout or create a fresh draft
     await this.restoreOrCreateActiveSession();
@@ -355,6 +356,7 @@ class WorkoutApp {
             if (log.exercise_id === duplicate.id) {
               log.exercise_id = canonical.id;
               log.exercise_name = canonical.name;
+              log.target_muscle_group = canonical.target_muscle_group || log.target_muscle_group;
               await localDB.put("exercise_logs", log);
             }
           }
@@ -364,6 +366,54 @@ class WorkoutApp {
       }
     } catch (err) {
       console.warn("Could not deduplicate exercises:", err);
+    }
+  }
+
+  // Backfills missing target_muscle_group on existing exercise_logs from exercise catalog or heuristics
+  async backfillLogMuscleGroups() {
+    try {
+      const logs = await localDB.getAll("exercise_logs");
+      if (!logs || logs.length === 0) return;
+      const exercises = await localDB.getAll("exercises");
+      const byId = new Map();
+      const byName = new Map();
+      for (const ex of exercises) {
+        if (ex.id) {
+          byId.set(String(ex.id), ex);
+          byId.set(String(ex.id).replace(/-/g, "").toLowerCase(), ex);
+        }
+        if (ex.name) {
+          byName.set(ex.name.trim().toLowerCase(), ex);
+        }
+      }
+
+      for (const log of logs) {
+        let changed = false;
+        let ex = null;
+        if (log.exercise_id) {
+          ex = byId.get(String(log.exercise_id)) || byId.get(String(log.exercise_id).replace(/-/g, "").toLowerCase());
+        }
+        if (!ex && log.exercise_name) {
+          ex = byName.get(log.exercise_name.trim().toLowerCase());
+          if (ex) {
+            log.exercise_id = ex.id;
+            changed = true;
+          }
+        }
+        const expectedMuscle = (ex && ex.target_muscle_group && ex.target_muscle_group !== "Other")
+          ? ex.target_muscle_group
+          : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : "Other");
+
+        if (expectedMuscle && expectedMuscle !== "Other" && log.target_muscle_group !== expectedMuscle) {
+          log.target_muscle_group = expectedMuscle;
+          changed = true;
+        }
+        if (changed) {
+          await localDB.put("exercise_logs", log);
+        }
+      }
+    } catch (e) {
+      console.warn("Backfill log muscle groups notice:", e);
     }
   }
 
@@ -1096,7 +1146,9 @@ class WorkoutApp {
 
     if (fullSession.exercise_logs && fullSession.exercise_logs.length > 0) {
       fullSession.exercise_logs.forEach((log) => {
-        const muscleGroup = log.target_muscle_group || "Other";
+        const muscleGroup = (log.target_muscle_group && log.target_muscle_group !== "Other")
+          ? log.target_muscle_group
+          : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : "Other");
         let logVol = 0;
         if (log.sets && log.sets.length > 0) {
           log.sets.forEach((s) => {
@@ -1885,6 +1937,7 @@ class WorkoutApp {
       return;
     }
 
+    const allExercises = (await localDB.getAll("exercises")) || [];
     const cards = [];
 
     for (const session of uniqueSessions) {
@@ -1916,7 +1969,7 @@ class WorkoutApp {
       const totalExercises = full.exercise_logs ? full.exercise_logs.length : 0;
 
       // Total volume and per-muscle-group breakdown for this historical workout
-      const { totalVolume: historyTotalVol, muscleVolumes: historyMuscleVols } = this.computeSessionVolume(full);
+      const { totalVolume: historyTotalVol, muscleVolumes: historyMuscleVols } = this.computeSessionVolume(full, allExercises);
 
       const summaryMeta = [
         `${totalExercises} exercise${totalExercises !== 1 ? "s" : ""}`,
@@ -1986,7 +2039,10 @@ class WorkoutApp {
             return `
               <div class="history-exercise-section">
                 <div class="history-exercise-header">
-                  <h4>${this.escapeHtml(log.exercise_name)}</h4>
+                  <div class="history-exercise-title-row">
+                    <h4>${this.escapeHtml(log.exercise_name)}</h4>
+                    ${log.target_muscle_group && log.target_muscle_group !== "Other" ? `<span class="history-exercise-mg-badge">${this.escapeHtml(log.target_muscle_group)}</span>` : ""}
+                  </div>
                   <span class="history-exercise-count">${log.sets ? log.sets.length : 0} sets</span>
                 </div>
                 ${exNotesHtml}
@@ -2248,7 +2304,8 @@ class WorkoutApp {
       exercise_id: exercise.id,
       order_index: nextOrder,
       notes: null,
-      exercise_name: exercise.name
+      exercise_name: exercise.name,
+      target_muscle_group: exercise.target_muscle_group || (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(exercise.name) : "Other")
     };
 
     await localDB.put("exercise_logs", newLog);
@@ -2325,11 +2382,30 @@ class WorkoutApp {
   }
 
   // Sums weight * reps for a full session, overall and per muscle group (sorted high to low)
-  computeSessionVolume(fullSession) {
+  computeSessionVolume(fullSession, exerciseCatalog = null) {
     let totalVolume = 0;
     const map = {};
     (fullSession.exercise_logs || []).forEach((log) => {
-      const mg = log.target_muscle_group || "Other";
+      let mg = (log.target_muscle_group && log.target_muscle_group !== "Other")
+        ? log.target_muscle_group
+        : null;
+
+      if (!mg && exerciseCatalog && exerciseCatalog.length > 0) {
+        const match = exerciseCatalog.find((e) =>
+          (log.exercise_id && (e.id === log.exercise_id || String(e.id).replace(/-/g, "").toLowerCase() === String(log.exercise_id).replace(/-/g, "").toLowerCase())) ||
+          (log.exercise_name && e.name && e.name.trim().toLowerCase() === log.exercise_name.trim().toLowerCase())
+        );
+        if (match && match.target_muscle_group && match.target_muscle_group !== "Other") {
+          mg = match.target_muscle_group;
+        }
+      }
+
+      if (!mg) {
+        mg = localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : "Other";
+      }
+
+      if (!mg) mg = "Other";
+
       (log.sets || []).forEach((s) => {
         const v = (s.weight || 0) * (s.reps || 0);
         totalVolume += v;
@@ -2595,7 +2671,9 @@ class WorkoutApp {
       duration_minutes: durationMins,
       exercises: (fullSession.exercise_logs || []).map((l) => ({
         exercise_name: l.exercise_name || "Exercise",
-        target_muscle_group: l.target_muscle_group || null,
+        target_muscle_group: (l.target_muscle_group && l.target_muscle_group !== "Other")
+          ? l.target_muscle_group
+          : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(l.exercise_name) : null),
         exercise_notes: l.notes || null,
         completed_sets: (l.sets || []).map((s) => ({
           set_number: s.set_number,
@@ -2677,7 +2755,9 @@ class WorkoutApp {
     const highlights = [];
 
     (fullSession.exercise_logs || []).forEach((ex) => {
-      const mg = ex.target_muscle_group || "Full Body";
+      const mg = (ex.target_muscle_group && ex.target_muscle_group !== "Other")
+        ? ex.target_muscle_group
+        : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(ex.exercise_name) : "Full Body");
       let exVol = 0;
       let maxWeight = 0;
       let bestSet = null;

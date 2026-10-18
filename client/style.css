@@ -322,6 +322,9 @@ body {
 .finish-bar {
   margin-top: 24px;
   padding-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 /* ============================================== */
@@ -1080,6 +1083,11 @@ body {
 .flex-1 {
   flex: 1;
 }
+
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
 
 .icon-btn {
   background: transparent;
@@ -2330,4 +2338,23 @@ body {
 
 .history-volume-panel .volume-total-number {
   font-size: 1.3rem;
+}
+
+.history-exercise-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-exercise-mg-badge {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated, #2a2a32);
+  color: var(--accent-gold, #f59e0b);
+  border: 1px solid rgba(245, 158, 11, 0.25);
 }

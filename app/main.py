@@ -147,7 +147,7 @@ def sync_workouts(payload: schemas.SyncPayload, db: Session = Depends(get_db)):
                     db_ex = models.Exercise(
                         id = log_data.exercise_id,
                         name = log_data.exercise_name or f"Exercise ({str(log_data.exercise_id)[:8]})",
-                        target_muscle_group = "Other",
+                        target_muscle_group = log_data.target_muscle_group or "Other",
                         default_equipment = "Other"
                     )
                     db.add(db_ex)

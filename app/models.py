@@ -51,6 +51,10 @@ class ExerciseLog(Base):
     def exercise_name(self) -> str:
         return self.exercise.name if self.exercise else "Exercise"
 
+    @property
+    def target_muscle_group(self) -> str:
+        return self.exercise.target_muscle_group if self.exercise else "Other"
+
 class SetEntry(Base):
     __tablename__ = "set_entries"
 

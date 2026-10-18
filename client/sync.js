@@ -82,6 +82,7 @@ class SyncManager {
             if (log.exercise_id === dup.id) {
               log.exercise_id = serverEx.id;
               log.exercise_name = serverEx.name;
+              log.target_muscle_group = serverEx.target_muscle_group || log.target_muscle_group;
               await this.db.put("exercise_logs", log);
             }
           }
@@ -165,6 +166,7 @@ class SyncManager {
               workout_session_id: session.id,
               exercise_id: log.exercise_id,
               exercise_name: log.exercise_name || "Exercise",
+              target_muscle_group: log.target_muscle_group || this.db.inferMuscleGroup(log.exercise_name) || "Other",
               order_index: log.order_index,
               notes: log.notes
             });
@@ -228,6 +230,7 @@ class SyncManager {
               id: log.id,
               exercise_id: log.exercise_id,
               exercise_name: log.exercise_name || null,
+              target_muscle_group: log.target_muscle_group || null,
               order_index: log.order_index,
               notes: log.notes,
               sets: log.sets.map((set) => ({

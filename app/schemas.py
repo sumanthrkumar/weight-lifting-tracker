@@ -45,6 +45,7 @@ class ExerciseLogBase(BaseModel):
     order_index: int
     notes: str | None = None
     exercise_name: str | None = None
+    target_muscle_group: str | None = None
 
 # Sync DTO: client supplies UUID and nested sets
 class ExerciseLogSync(ExerciseLogBase):

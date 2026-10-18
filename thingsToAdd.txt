@@ -1,7 +1,3 @@
-1. Ai Insights tab doesn't work at all. 
+the volume breakdown by muscle group doesn't work in the history tab. It just lists them all under other.
 
-2. I can't add notes to historical workouts.
-
-3. I want to see total volume and total volume breakdown per muscle group for historical workouts.
-
-4. Clicking Ai insights on a historical workout takes me to the ai insights tab but that doedsn't do anything.
+There is no space between Finish & Save Session button and Ai insights for this workout button in the workout tab

@@ -116,19 +116,65 @@ class LocalDatabase {
     const logs = await this.getByIndex("exercise_logs", "workout_session_id", sessionId);
     logs.sort((a, b) => a.order_index - b.order_index);
 
+    const allExercises = (await this.getAll("exercises")) || [];
+    const exerciseMap = new Map();
+    const nameMap = new Map();
+    for (const ex of allExercises) {
+      if (ex.id) {
+        exerciseMap.set(String(ex.id), ex);
+        exerciseMap.set(String(ex.id).replace(/-/g, "").toLowerCase(), ex);
+      }
+      if (ex.name) {
+        nameMap.set(ex.name.trim().toLowerCase(), ex);
+      }
+    }
+
     for (const log of logs) {
       const sets = await this.getByIndex("set_entries", "exercise_log_id", log.id);
       sets.sort((a, b) => a.set_number - b.set_number);
       log.sets = sets;
 
       // Populate exercise name and category if available
-      const exercise = await this.get("exercises", log.exercise_id);
+      let exercise = null;
+      if (log.exercise_id) {
+        exercise = exerciseMap.get(String(log.exercise_id)) ||
+                   exerciseMap.get(String(log.exercise_id).replace(/-/g, "").toLowerCase());
+      }
+      if (!exercise && log.exercise_name) {
+        exercise = nameMap.get(log.exercise_name.trim().toLowerCase());
+      }
+
       log.exercise_name = exercise ? exercise.name : (log.exercise_name || "Exercise");
-      log.target_muscle_group = exercise ? (exercise.target_muscle_group || "Other") : "Other";
+
+      let muscle = (exercise && exercise.target_muscle_group && exercise.target_muscle_group !== "Other")
+        ? exercise.target_muscle_group
+        : (log.target_muscle_group && log.target_muscle_group !== "Other" ? log.target_muscle_group : null);
+
+      if (!muscle || muscle === "Other") {
+        muscle = this.inferMuscleGroup(log.exercise_name);
+      }
+      log.target_muscle_group = muscle || "Other";
     }
 
     session.exercise_logs = logs;
     return session;
+  }
+
+  // Heuristic muscle group inference from exercise names
+  inferMuscleGroup(name) {
+    if (!name) return "Other";
+    const n = name.toLowerCase();
+    if (n.includes("overhead") || n.includes("shoulder") || n.includes("ohp") || n.includes("lateral") || n.includes("delt") || n.includes("military") || n.includes("front raise") || n.includes("rear delt")) return "Shoulders";
+    if (n.includes("row") || /\blat\b|\blats\b|pulldown|pull-down|pull-up|pullup|chin-up|chinup|back|t-bar|t bar/.test(n)) return "Back";
+    if (n.includes("bench") || n.includes("chest") || n.includes("push-up") || n.includes("pushup") || n.includes("fly") || n.includes("pec") || n.includes("incline") || n.includes("decline")) return "Chest";
+    if (n.includes("squat") || n.includes("leg press") || n.includes("quad") || n.includes("lunge") || n.includes("hack") || n.includes("leg extension")) return "Quads";
+    if (n.includes("deadlift") || n.includes("rdl") || n.includes("hamstring") || n.includes("leg curl") || n.includes("good morning")) return "Hamstrings";
+    if (n.includes("bicep") || n.includes("curl") || n.includes("preacher") || n.includes("hammer")) return "Biceps";
+    if (n.includes("tricep") || n.includes("pushdown") || n.includes("skull") || n.includes("extension") || n.includes("close-grip") || n.includes("dip")) return "Triceps";
+    if (n.includes("calf") || n.includes("calves")) return "Calves";
+    if (n.includes("abs") || /\bab\b/.test(n) || n.includes("crunch") || n.includes("plank") || n.includes("core")) return "Abs";
+    if (n.includes("glute") || n.includes("hip thrust") || n.includes("kickback") || n.includes("abductor")) return "Glutes";
+    return "Other";
   }
 }
 
