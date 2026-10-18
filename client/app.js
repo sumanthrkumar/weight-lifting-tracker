@@ -224,6 +224,7 @@ class WorkoutApp {
     this.restTimer = new RestTimerManager(this);
     this.isSavingSet = false;
     this.editingSetId = null;
+    this.lastSaveTime = 0;
   }
 
   async init() {
@@ -1477,16 +1478,23 @@ class WorkoutApp {
 
   async saveCurrentSet() {
     if (!this.activeLog) return;
-    if (this.isSavingSet) return;
+
+    // Hard double-tap & spam protection: check both lock flag and 1200ms debounce
+    const now = Date.now();
+    if (this.isSavingSet || (this.lastSaveTime && now - this.lastSaveTime < 1200)) {
+      return;
+    }
+    this.isSavingSet = true;
+    this.lastSaveTime = now;
 
     const saveBtn = document.getElementById("btn-save-set");
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.style.pointerEvents = "none";
+      saveBtn.classList.add("btn-disabled", "btn-saving");
+    }
 
     try {
-      this.isSavingSet = true;
-      if (saveBtn) {
-        saveBtn.disabled = true;
-      }
-
       const weight = parseFloat(document.getElementById("input-weight").value) || 0;
       const reps = parseInt(document.getElementById("input-reps").value, 10) || 1;
       const rirVal = document.getElementById("input-rir").value;
@@ -1528,15 +1536,26 @@ class WorkoutApp {
               <span>UPDATED</span>
             `;
             this.saveBtnTimeout = setTimeout(() => {
-              saveBtn.classList.remove("btn-saved-success");
+              saveBtn.classList.remove("btn-saved-success", "btn-disabled", "btn-saving");
               saveBtn.innerHTML = "SAVE SET";
+              saveBtn.disabled = false;
+              saveBtn.style.pointerEvents = "";
+              this.isSavingSet = false;
               this.saveBtnTimeout = null;
             }, 1200);
+          } else {
+            this.isSavingSet = false;
           }
 
           this.showToast(`Set ${setNum} Updated (${weight.toFixed(1)} lbs × ${reps} reps)`);
         } else {
           this.cancelEditSet(false);
+          this.isSavingSet = false;
+          if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.style.pointerEvents = "";
+            saveBtn.classList.remove("btn-disabled", "btn-saving");
+          }
         }
       } else {
         // Create new set entry
@@ -1575,10 +1594,15 @@ class WorkoutApp {
             <span>SAVED</span>
           `;
           this.saveBtnTimeout = setTimeout(() => {
-            saveBtn.classList.remove("btn-saved-success");
-            saveBtn.innerHTML = "SAVE SET";
+            saveBtn.classList.remove("btn-saved-success", "btn-disabled", "btn-saving");
+            saveBtn.innerHTML = this.editingSetId ? "UPDATE SET" : "SAVE SET";
+            saveBtn.disabled = false;
+            saveBtn.style.pointerEvents = "";
+            this.isSavingSet = false;
             this.saveBtnTimeout = null;
           }, 1200);
+        } else {
+          this.isSavingSet = false;
         }
 
         // Floating toast confirmation
@@ -1591,10 +1615,11 @@ class WorkoutApp {
     } catch (err) {
       console.error("Error saving set:", err);
       this.showToast("Failed to save set", "error");
-    } finally {
       this.isSavingSet = false;
       if (saveBtn) {
         saveBtn.disabled = false;
+        saveBtn.style.pointerEvents = "";
+        saveBtn.classList.remove("btn-disabled", "btn-saving");
       }
     }
   }
