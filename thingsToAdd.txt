@@ -3,3 +3,7 @@
 2. Ability to edit a set after it has been saved in the UI. I can delete it but I would like to be able to edit it as well. 
 
 3. Apply double tap protection to disable the Save button when saving sets. 
+
+4. I want the Ai Insights tab to be smarter. I want to be able to tap a workout and it can provide me some basic feedback on the workout. Tell me total volume per muscle group, based on my notes and RIR, if I should improve my weights or sets for the next time I do a similar workout. Suggest weights for next times workout. Give me any form queues if needed based on notes on form breakdown and how heavy the weight feels. Also any tips to maintain that form
+
+5. I have no ability to add notes to a workout at all. Also there is no AI Insight at a workout level for any notes I have or any plans I have for the workout

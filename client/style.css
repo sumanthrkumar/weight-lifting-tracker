@@ -1711,3 +1711,612 @@ body {
   font-weight: 600;
 }
 
+/* ============================================== */
+/* Workout Notes & Plan (Feature 5)              */
+/* ============================================== */
+
+.session-notes-box {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin: 12px 0 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.15s;
+}
+
+.session-notes-box:focus-within {
+  border-color: var(--accent-gold);
+}
+
+.session-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-notes-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+}
+
+.notes-status-badge {
+  font-size: 0.65rem;
+  color: var(--text-subtle);
+  transition: color 0.2s;
+}
+
+.notes-status-badge.saving {
+  color: var(--accent-gold);
+}
+
+.session-notes-textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-family: inherit;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 48px;
+}
+
+.session-notes-textarea::placeholder {
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+/* History Workout Notes Item */
+.history-session-notes-box {
+  background: rgba(200, 162, 122, 0.06);
+  border-left: 3px solid var(--accent-tan);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 8px 12px;
+  margin: 10px 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.history-session-notes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-notes-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+}
+
+.history-notes-text {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  line-height: 1.4;
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.history-notes-edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent-gold);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+}
+
+.history-notes-edit-btn:hover {
+  text-decoration: underline;
+}
+
+.history-actions-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+}
+
+/* ============================================== */
+/* AI Insights Dashboard Styles (Feature 4)       */
+/* ============================================== */
+
+.insights-view-header {
+  margin-bottom: 14px;
+}
+
+.insights-view-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.insights-selector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.insights-selector-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.insights-selector-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+}
+
+.insights-count-badge {
+  font-size: 0.7rem;
+  color: var(--text-subtle);
+}
+
+.insights-chips-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.insights-chips-scroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.insights-chips-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 2px;
+}
+
+.insight-chip-item {
+  flex-shrink: 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 130px;
+  max-width: 170px;
+  transition: all 0.15s ease;
+}
+
+.insight-chip-item:hover {
+  border-color: var(--accent-tan);
+  background: rgba(200, 162, 122, 0.05);
+}
+
+.insight-chip-item.active {
+  border-color: var(--accent-gold);
+  background: linear-gradient(145deg, #2a241c, #1f1d19);
+  box-shadow: 0 0 10px rgba(217, 155, 68, 0.25);
+}
+
+.chip-status-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: inline-block;
+  padding: 1px 5px;
+  border-radius: 3px;
+  width: fit-content;
+}
+
+.chip-status-tag.active-tag {
+  background: rgba(217, 155, 68, 0.2);
+  color: var(--accent-gold);
+}
+
+.chip-status-tag.past-tag {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-muted);
+}
+
+.chip-workout-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-main);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chip-workout-vol {
+  font-size: 0.72rem;
+  color: var(--accent-tan);
+  font-weight: 500;
+}
+
+/* Action Banner */
+.insights-action-card {
+  background: linear-gradient(135deg, #25221e, #1c1a18);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 10px;
+}
+
+.insights-action-info h3 {
+  font-size: 0.92rem;
+  margin: 0 0 2px 0;
+  color: var(--text-main);
+}
+
+.insights-action-info span {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+/* Results Section Cards */
+.insights-results-container {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.insight-card-section {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
+  animation: fadeIn 0.25s ease-out;
+}
+
+.insight-card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.insight-card-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Strain Rating Badges */
+.strain-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.strain-pill.light {
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.strain-pill.moderate {
+  background: rgba(217, 155, 68, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(217, 155, 68, 0.3);
+}
+
+.strain-pill.high {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
+.strain-pill.excessive {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.5);
+}
+
+/* Assessment Card Content */
+.insight-assessment-text {
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--text-main);
+  margin: 0;
+}
+
+.insight-session-notes-feedback {
+  background: rgba(217, 155, 68, 0.08);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 12px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insight-notes-quote-title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.insight-notes-quote-body {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0;
+}
+
+.insight-notes-feedback-body {
+  font-size: 0.82rem;
+  color: var(--text-main);
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+/* Muscle Volume Progress Bars */
+.muscle-volume-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.muscle-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.muscle-bar-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+.muscle-bar-name {
+  color: var(--text-main);
+  font-weight: 600;
+}
+
+.muscle-bar-val {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.muscle-bar-track {
+  height: 6px;
+  background: var(--bg-control);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.muscle-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-tan), var(--accent-gold));
+  border-radius: 3px;
+  transition: width 0.5s ease-out;
+}
+
+/* Progression Suggestions */
+.progression-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progression-item-card {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progression-item-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.progression-exercise-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.progression-target-badge {
+  background: rgba(52, 211, 153, 0.15);
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  color: #34d399;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.progression-current-perf {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.progression-rec-text {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Form Cues & Maintenance Tips */
+.form-cues-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.form-cue-item-card {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-cue-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.form-cue-obs {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.form-cue-cue {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.form-cue-tip {
+  font-size: 0.78rem;
+  color: var(--accent-tan);
+  background: rgba(200, 162, 122, 0.08);
+  padding: 6px 8px;
+  border-radius: 4px;
+  line-height: 1.4;
+  margin: 0;
+}
+
+/* Highlights and Recovery */
+.highlights-bullet-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.highlights-bullet-list li {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.highlights-bullet-list li::before {
+  content: "•";
+  color: var(--accent-gold);
+  font-weight: bold;
+}
+
+.recovery-text {
+  font-size: 0.82rem;
+  color: var(--text-main);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* Insights Diagnostics Card */
+.insights-diagnostics-card {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.diag-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.diag-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  text-transform: uppercase;
+}
+
+.diag-engine-badge {
+  font-size: 0.65rem;
+  color: var(--accent-tan);
+  font-weight: 600;
+}
+
+#storage-diagnostics {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Loading spinner in analyze button */
+.spin-loader {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+

@@ -264,9 +264,17 @@ def coach_exercise_feedback(payload: schemas.CoachExerciseFeedbackRequest):
 @app.post("/coach/workout", response_model=schemas.CoachWorkoutFeedbackResponse)
 def coach_workout_feedback(payload: schemas.CoachWorkoutFeedbackRequest):
     print(f"[WORKOUT COACH REQ] {payload.workout_name} exercises={len(payload.exercises)}", flush=True)
-    res = coach.generate_workout_feedback(payload)
-    print(f"[WORKOUT COACH RES] strain={res.strain_rating} volume={res.total_volume_lbs}", flush=True)
-    return res
+    try:
+        res = coach.generate_workout_feedback(payload)
+        print(f"[WORKOUT COACH RES] strain={res.strain_rating} volume={res.total_volume_lbs}", flush=True)
+        return res
+    except Exception as e:
+        print(f"[WORKOUT COACH ERROR] {e}", flush=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AI Coach generation error: {str(e)}"
+        )
+
 
 
 # Serve Mobile PWA Client

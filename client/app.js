@@ -457,6 +457,8 @@ class WorkoutApp {
     this.startTime = null;
     this.stopTimer();
     this.resetTimerDisplay();
+    const notesInput = document.getElementById("session-notes-input");
+    if (notesInput) notesInput.value = "";
     await this.renderWorkoutOverview();
   }
 
@@ -576,6 +578,52 @@ class WorkoutApp {
         });
       }
     });
+
+    // Session Notes Input & Auto-Save (Feature 5)
+    const sessionNotesInput = document.getElementById("session-notes-input");
+    const sessionNotesStatus = document.getElementById("session-notes-status");
+    let sessionNotesDebounce = null;
+    if (sessionNotesInput) {
+      const handleNotesChange = async () => {
+        if (!this.activeSession) return;
+        this.activeSession.session_notes = sessionNotesInput.value.trim() || null;
+        if (sessionNotesStatus) {
+          sessionNotesStatus.textContent = "Saving...";
+          sessionNotesStatus.classList.add("saving");
+        }
+        await localDB.put("workout_sessions", {
+          id: this.activeSession.id,
+          name: this.activeSession.name,
+          started_at: this.activeSession.started_at,
+          completed_at: this.activeSession.completed_at,
+          session_notes: this.activeSession.session_notes,
+          routine_id: this.activeSession.routine_id,
+          synced: false,
+          status: this.activeSession.status
+        });
+        if (sessionNotesStatus) {
+          sessionNotesStatus.textContent = "Auto-saved";
+          sessionNotesStatus.classList.remove("saving");
+        }
+      };
+
+      sessionNotesInput.addEventListener("input", () => {
+        if (sessionNotesDebounce) clearTimeout(sessionNotesDebounce);
+        sessionNotesDebounce = setTimeout(handleNotesChange, 500);
+      });
+      sessionNotesInput.addEventListener("change", handleNotesChange);
+    }
+
+    // Preview AI Workout Insights Button (Feature 4 & 5)
+    const previewAiBtn = document.getElementById("btn-preview-workout-ai");
+    if (previewAiBtn) {
+      previewAiBtn.addEventListener("click", () => {
+        if (this.activeSession) {
+          this.selectedInsightsSessionId = this.activeSession.id;
+        }
+        this.switchView("view-insights");
+      });
+    }
 
     // Add Exercise Button (opens modal)
     document.getElementById("btn-add-exercise").addEventListener("click", () => {
@@ -906,6 +954,36 @@ class WorkoutApp {
         this.showToast(`Deleted "${name}"`);
       });
     }
+
+    // Edit Workout Notes Modal Close & Submit
+    const closeNotesModalBtn = document.getElementById("btn-close-notes-modal");
+    if (closeNotesModalBtn) {
+      closeNotesModalBtn.addEventListener("click", () => {
+        document.getElementById("modal-edit-workout-notes").classList.add("hidden");
+      });
+    }
+
+    const editNotesForm = document.getElementById("form-edit-workout-notes");
+    if (editNotesForm) {
+      editNotesForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const sessionId = document.getElementById("edit-session-notes-id").value;
+        const notesText = document.getElementById("edit-session-notes-text").value.trim() || null;
+        if (!sessionId) return;
+        await this.saveWorkoutNotes(sessionId, notesText);
+        document.getElementById("modal-edit-workout-notes").classList.add("hidden");
+      });
+    }
+
+    // Run Insights Button in AI Insights tab
+    const runInsightsBtn = document.getElementById("btn-run-insights");
+    if (runInsightsBtn) {
+      runInsightsBtn.addEventListener("click", async () => {
+        if (this.selectedInsightsSessionId) {
+          await this.runWorkoutAIInsights(this.selectedInsightsSessionId, true);
+        }
+      });
+    }
   }
 
   bindStepper(minusId, plusId, inputId, minusDelta, plusDelta) {
@@ -993,7 +1071,7 @@ class WorkoutApp {
       } else if (viewId === "view-insights") {
         titleEl.textContent = "AI Insights";
         syncManager.updateStatusBadge();
-        this.updateDiagnostics();
+        this.renderInsightsView();
       }
     }
   }
@@ -1008,6 +1086,9 @@ class WorkoutApp {
 
     const nameInput = document.getElementById("session-name-input");
     if (nameInput) nameInput.value = fullSession.name || "Freeform Workout";
+
+    const notesInput = document.getElementById("session-notes-input");
+    if (notesInput) notesInput.value = fullSession.session_notes || "";
 
     // Calculate workout volume and category breakdown
     let totalWorkoutVolume = 0;
@@ -1909,17 +1990,54 @@ class WorkoutApp {
           </div>
         </div>
         <div class="history-card-details">
+          <div class="history-session-notes-box">
+            <div class="history-session-notes-header">
+              <span class="history-notes-label">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                <span>Workout Notes:</span>
+              </span>
+              <button type="button" class="history-notes-edit-btn" data-session-id="${session.id}">${session.session_notes ? "Edit Note" : "+ Add Note"}</button>
+            </div>
+            <p class="history-notes-text">${session.session_notes ? this.escapeHtml(session.session_notes) : `<span style="color: var(--text-subtle); font-style: italic;">No session notes entered. Tap to add plan or reflections.</span>`}</p>
+          </div>
           ${exerciseBreakdownHtml}
-          <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+          <div class="history-actions-bar">
+            <button class="btn btn-primary btn-sm history-ai-insights-btn" data-session-id="${session.id}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right: 4px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 16v-4M12 8h.01"></path>
+              </svg>
+              AI Insights
+            </button>
             <button class="btn btn-neutral btn-sm history-delete-btn">Delete Workout</button>
           </div>
         </div>
       `;
 
       card.addEventListener("click", (e) => {
-        if (e.target.closest(".history-delete-btn")) return;
+        if (e.target.closest(".history-delete-btn") || e.target.closest(".history-notes-edit-btn") || e.target.closest(".history-ai-insights-btn")) return;
         card.classList.toggle("expanded");
       });
+
+      const editNotesBtn = card.querySelector(".history-notes-edit-btn");
+      if (editNotesBtn) {
+        editNotesBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openEditWorkoutNotesModal(session);
+        });
+      }
+
+      const aiInsightsBtn = card.querySelector(".history-ai-insights-btn");
+      if (aiInsightsBtn) {
+        aiInsightsBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.selectedInsightsSessionId = session.id;
+          this.switchView("view-insights");
+        });
+      }
 
       const deleteBtn = card.querySelector(".history-delete-btn");
       if (deleteBtn) {
@@ -2161,21 +2279,591 @@ class WorkoutApp {
     }
   }
 
-  async updateDiagnostics() {
-    const el = document.getElementById("storage-diagnostics");
-    if (!el) return;
+  // Open modal to add or edit workout notes on a session
+  openEditWorkoutNotesModal(session) {
+    const modal = document.getElementById("modal-edit-workout-notes");
+    if (!modal) return;
+    const idInput = document.getElementById("edit-session-notes-id");
+    const textInput = document.getElementById("edit-session-notes-text");
+    const titleLabel = document.getElementById("edit-session-notes-title-label");
 
-    const exercises = await localDB.getAll("exercises");
-    const sessions = await localDB.getAll("workout_sessions");
-    const logs = await localDB.getAll("exercise_logs");
-    const sets = await localDB.getAll("set_entries");
+    if (idInput) idInput.value = session.id;
+    if (textInput) textInput.value = session.session_notes || "";
+    if (titleLabel) {
+      titleLabel.textContent = `Notes for ${session.name || "Workout"} (${new Date(session.started_at).toLocaleDateString()})`;
+    }
+    modal.classList.remove("hidden");
+    if (textInput) textInput.focus();
+  }
 
-    el.innerHTML = `
-      Local IndexedDB records:<br>
-      &bull; Exercises: ${exercises.length}<br>
-      &bull; Sessions: ${sessions.length} (${sessions.filter((s) => s.synced).length} synced)<br>
-      &bull; Logs: ${logs.length}<br>
-      &bull; Sets: ${sets.length}
+  // Save workout notes for any session (active or past)
+  async saveWorkoutNotes(sessionId, newNotes) {
+    const session = await localDB.get("workout_sessions", sessionId);
+    if (!session) return;
+    session.session_notes = newNotes;
+    session.synced = false;
+    delete session.ai_insights; // Invalidate cached insights so they refresh with new notes
+    await localDB.put("workout_sessions", session);
+
+    if (this.activeSession && this.activeSession.id === sessionId) {
+      this.activeSession.session_notes = newNotes;
+      const notesInput = document.getElementById("session-notes-input");
+      if (notesInput) notesInput.value = newNotes || "";
+    }
+
+    this.showToast("Workout notes saved");
+    await syncManager.syncNow();
+    if (this.currentView === "view-history") {
+      await this.renderHistory();
+    } else if (this.currentView === "view-insights") {
+      await this.renderInsightsView();
+    }
+  }
+
+  // Render the dynamic AI Insights dashboard
+  async renderInsightsView() {
+    this.updateDiagnostics();
+    const container = document.getElementById("insights-results-container");
+    const selectorScroll = document.getElementById("insights-workout-selector");
+    const totalCountEl = document.getElementById("insights-total-workouts-count");
+    if (!selectorScroll || !container) return;
+
+    // Retrieve all completed sessions and active draft
+    const allSessions = await localDB.getAll("workout_sessions");
+    const completed = allSessions
+      .filter((s) => s.status === "completed")
+      .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
+
+    // Deduplicate completed sessions by ID and timestamp
+    const seenIds = new Set();
+    const uniqueWorkouts = [];
+    for (const s of completed) {
+      if (!seenIds.has(s.id)) {
+        seenIds.add(s.id);
+        uniqueWorkouts.push(s);
+      }
+    }
+
+    const availableWorkouts = [];
+    if (this.activeSession) {
+      availableWorkouts.push(this.activeSession);
+    }
+    uniqueWorkouts.forEach((w) => availableWorkouts.push(w));
+
+    if (totalCountEl) {
+      totalCountEl.textContent = `${availableWorkouts.length} workout${availableWorkouts.length !== 1 ? "s" : ""}`;
+    }
+
+    if (availableWorkouts.length === 0) {
+      selectorScroll.innerHTML = `<div class="empty-state" style="padding: 6px;"><p>No workouts recorded yet.</p></div>`;
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>Start a workout or finish logging sets to view AI volume analytics, progression recommendations, and form cues.</p>
+        </div>
+      `;
+      document.getElementById("insights-action-card")?.classList.add("hidden");
+      return;
+    }
+
+    // Determine currently selected session
+    if (!this.selectedInsightsSessionId || !availableWorkouts.some((w) => w.id === this.selectedInsightsSessionId)) {
+      this.selectedInsightsSessionId = availableWorkouts[0].id;
+    }
+
+    // Render selector chips
+    selectorScroll.innerHTML = "";
+    for (const w of availableWorkouts) {
+      const isSelected = w.id === this.selectedInsightsSessionId;
+      const isActiveDraft = w.status === "in_progress" || (this.activeSession && this.activeSession.id === w.id);
+      
+      const full = await localDB.getFullSession(w.id);
+      let vol = 0;
+      if (full && full.exercise_logs) {
+        full.exercise_logs.forEach((l) => {
+          (l.sets || []).forEach((s) => {
+            vol += (s.weight || 0) * (s.reps || 0);
+          });
+        });
+      }
+
+      const dateStr = w.started_at
+        ? new Date(w.started_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+        : "Today";
+
+      const chip = document.createElement("div");
+      chip.className = `insight-chip-item ${isSelected ? "active" : ""}`;
+      chip.setAttribute("data-session-id", w.id);
+      chip.innerHTML = `
+        <span class="chip-status-tag ${isActiveDraft ? "active-tag" : "past-tag"}">
+          ${isActiveDraft ? "In Progress" : dateStr}
+        </span>
+        <span class="chip-workout-name">${this.escapeHtml(w.name || "Workout")}</span>
+        <span class="chip-workout-vol">${Math.round(vol).toLocaleString()} lbs</span>
+      `;
+
+      chip.addEventListener("click", () => {
+        this.selectedInsightsSessionId = w.id;
+        document.querySelectorAll(".insight-chip-item").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        this.displaySelectedWorkoutInsights(w.id);
+      });
+
+      selectorScroll.appendChild(chip);
+    }
+
+    // Display the currently selected workout's insights
+    await this.displaySelectedWorkoutInsights(this.selectedInsightsSessionId);
+  }
+
+  // Display insights for the selected workout
+  async displaySelectedWorkoutInsights(sessionId) {
+    const actionCard = document.getElementById("insights-action-card");
+    const titleEl = document.getElementById("insights-selected-title");
+    const metaEl = document.getElementById("insights-selected-meta");
+    const container = document.getElementById("insights-results-container");
+    if (!container) return;
+
+    const fullSession = await localDB.getFullSession(sessionId);
+    if (!fullSession) {
+      container.innerHTML = `<div class="empty-state"><p>Workout session not found.</p></div>`;
+      return;
+    }
+
+    const isActiveDraft = fullSession.status === "in_progress" || (this.activeSession && this.activeSession.id === fullSession.id);
+    const dateDisplay = fullSession.started_at
+      ? new Date(fullSession.started_at).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric"
+        })
+      : "Active Today";
+
+    const totalSets = (fullSession.exercise_logs || []).reduce((acc, l) => acc + (l.sets ? l.sets.length : 0), 0);
+    const totalExercises = (fullSession.exercise_logs || []).length;
+
+    if (actionCard && titleEl && metaEl) {
+      actionCard.classList.remove("hidden");
+      titleEl.textContent = `${fullSession.name || "Workout"} ${isActiveDraft ? "(In Progress)" : ""}`;
+      metaEl.textContent = `${dateDisplay} • ${totalExercises} exercise${totalExercises !== 1 ? "s" : ""} • ${totalSets} set${totalSets !== 1 ? "s" : ""}`;
+    }
+
+    // If session has cached insights, render immediately
+    if (fullSession.ai_insights) {
+      this.renderInsightsContent(fullSession.ai_insights, fullSession);
+      return;
+    }
+
+    // If no sets and no notes, prompt to log
+    if (totalSets === 0 && !fullSession.session_notes) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No sets or workout notes have been logged for "${this.escapeHtml(fullSession.name || "Workout")}". Add notes or complete sets to generate AI insights.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Automatically trigger analysis for this workout
+    await this.runWorkoutAIInsights(sessionId, false);
+  }
+
+  // Execute AI analysis via API or local deterministic engine
+  async runWorkoutAIInsights(sessionId, forceRefresh = false) {
+    const container = document.getElementById("insights-results-container");
+    const runBtn = document.getElementById("btn-run-insights");
+    const engineBadge = document.getElementById("ai-engine-status");
+    if (!container) return;
+
+    const fullSession = await localDB.getFullSession(sessionId);
+    if (!fullSession) return;
+
+    // Show loading state
+    if (runBtn) {
+      runBtn.disabled = true;
+      runBtn.innerHTML = `
+        <svg class="spin-loader" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10"></path>
+        </svg>
+        <span>Analyzing...</span>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="empty-state" style="padding: 30px 10px;">
+        <svg class="spin-loader" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--accent-gold)" stroke-width="2.5" style="margin-bottom: 12px;">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10"></path>
+        </svg>
+        <p style="color: var(--text-main); font-weight: 600;">Analyzing Volume, Biomechanics &amp; Overload Targets...</p>
+        <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Evaluating set notes, RIR, and session plan...</p>
+      </div>
+    `;
+
+    let durationMins = null;
+    if (fullSession.completed_at && fullSession.started_at) {
+      durationMins = Math.max(1, Math.round((new Date(fullSession.completed_at) - new Date(fullSession.started_at)) / 60000));
+    }
+
+    const payload = {
+      workout_name: fullSession.name || "Workout",
+      session_notes: fullSession.session_notes || null,
+      duration_minutes: durationMins,
+      exercises: (fullSession.exercise_logs || []).map((l) => ({
+        exercise_name: l.exercise_name || "Exercise",
+        target_muscle_group: l.target_muscle_group || null,
+        exercise_notes: l.notes || null,
+        completed_sets: (l.sets || []).map((s) => ({
+          set_number: s.set_number,
+          set_type: s.set_type || "normal",
+          weight: s.weight || 0,
+          reps: s.reps || 0,
+          rir: s.rir !== undefined ? s.rir : null,
+          completed: !!s.completed,
+          notes: s.notes || null
+        }))
+      }))
+    };
+
+    let insights = null;
+    let engineSource = "Cloud Coach";
+
+    // Attempt server request
+    if (navigator.onLine) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/coach/workout`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          insights = await res.json();
+          engineSource = "Gemini Strength Engine";
+        }
+      } catch (err) {
+        console.warn("Server AI coach error, using deterministic engine:", err);
+      }
+    }
+
+    // Local deterministic fallback engine
+    if (!insights) {
+      insights = this.generateLocalWorkoutInsights(fullSession);
+      engineSource = "Local Strength Engine";
+    }
+
+    if (engineBadge) {
+      engineBadge.textContent = engineSource;
+    }
+
+    // Cache insights on session in IndexedDB
+    fullSession.ai_insights = insights;
+    await localDB.put("workout_sessions", fullSession);
+
+    if (runBtn) {
+      runBtn.disabled = false;
+      runBtn.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+        </svg>
+        <span>Refresh Insights</span>
+      `;
+    }
+
+    this.renderInsightsContent(insights, fullSession);
+  }
+
+  // Deterministic local client fallback engine
+  generateLocalWorkoutInsights(fullSession) {
+    const muscleMap = {};
+    let totalVol = 0;
+    const progressionSuggestions = [];
+    const formCues = [];
+    const highlights = [];
+
+    (fullSession.exercise_logs || []).forEach((ex) => {
+      const mg = ex.target_muscle_group || "Full Body";
+      let exVol = 0;
+      let maxWeight = 0;
+      let bestSet = null;
+      const rirs = [];
+      const allNotes = [];
+      if (ex.notes) allNotes.append ? allNotes.append(ex.notes) : allNotes.push(ex.notes);
+
+      (ex.sets || []).forEach((s) => {
+        const vol = (s.weight || 0) * (s.reps || 0);
+        exVol += vol;
+        totalVol += vol;
+        muscleMap[mg] = (muscleMap[mg] || 0) + vol;
+        if ((s.weight || 0) > maxWeight) {
+          maxWeight = s.weight || 0;
+          bestSet = s;
+        }
+        if (s.rir !== null && s.rir !== undefined) rirs.push(s.rir);
+        if (s.notes) allNotes.push(s.notes);
+      });
+
+      if (bestSet) {
+        const avgRir = rirs.length > 0 ? rirs.reduce((a, b) => a + b, 0) / rirs.length : 2;
+        let nextWeight = maxWeight;
+        let rec = "";
+        if (avgRir >= 2) {
+          const inc = maxWeight >= 100 ? 5 : 2.5;
+          nextWeight = Math.round((maxWeight + inc) / 2.5) * 2.5;
+          rec = `Average RIR of ${avgRir.toFixed(1)} confirms reserve capacity. Increase working load to ${nextWeight} lbs next session for progressive overload.`;
+        } else if (avgRir === 0) {
+          nextWeight = maxWeight;
+          rec = `Working sets reached technical failure (RIR 0). Maintain ${nextWeight} lbs next session and aim for 1-2 additional clean reps before advancing weight.`;
+        } else {
+          nextWeight = Math.round((maxWeight + 2.5) / 2.5) * 2.5;
+          rec = `Optimal training intensity achieved (RIR ~1). Consider a micro-progression to ${nextWeight} lbs or adding another set next cycle.`;
+        }
+
+        progressionSuggestions.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          current_performance: `${bestSet.weight} lbs x ${bestSet.reps} reps (RIR ${bestSet.rir !== null && bestSet.rir !== undefined ? bestSet.rir : "N/A"})`,
+          suggested_weight: nextWeight,
+          suggested_reps: bestSet.reps,
+          suggested_sets: (ex.sets || []).length,
+          recommendation: rec
+        });
+      }
+
+      const combinedNotes = allNotes.join(" ").toLowerCase();
+      if (combinedNotes.includes("flare") || combinedNotes.includes("elbow")) {
+        formCues.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          form_cue: "Tuck elbows to 45–60 degrees relative to your torso.",
+          observation: `Notes indicated elbow flare or shoulder stress on ${ex.exercise_name}.`,
+          maintenance_tip: "Pack shoulder blades into your back pockets and actively pull the bar toward your chest to engage lats."
+        });
+      } else if (combinedNotes.includes("back") || combinedNotes.includes("spine") || combinedNotes.includes("round")) {
+        formCues.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          form_cue: "Brace intra-abdominal pressure (Valsalva) and maintain a rigid neutral spine.",
+          observation: `Notes indicated lumbar or spine fatigue on ${ex.exercise_name}.`,
+          maintenance_tip: "Hinge cleanly from the hips and lead with the chest; do not initiate movement by flexing lumbar vertebrae."
+        });
+      } else if (combinedNotes.includes("knee") || combinedNotes.includes("cave") || combinedNotes.includes("valgus")) {
+        formCues.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          form_cue: "Drive knees outward over your 2nd and 3rd toes throughout the movement.",
+          observation: `Notes indicated knee collapse or uneven tracking on ${ex.exercise_name}.`,
+          maintenance_tip: "Maintain tripod foot contact (heel, big toe, pinky toe) and corkscrew feet into the floor."
+        });
+      } else if (combinedNotes.includes("heavy") || combinedNotes.includes("struggle") || combinedNotes.includes("slow")) {
+        formCues.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          form_cue: "Maintain consistent bar path velocity through the sticking point.",
+          observation: `Lifter experienced significant load resistance on ${ex.exercise_name}.`,
+          maintenance_tip: "Commit to aggressive concentric drive while keeping core stability completely locked."
+        });
+      } else if ((ex.sets || []).length > 0) {
+        formCues.push({
+          exercise_name: ex.exercise_name || "Exercise",
+          form_cue: "Control the eccentric phase for 2-3 seconds to maximize mechanical tension.",
+          observation: `Key biomechanical cue for ${ex.exercise_name}.`,
+          maintenance_tip: "Pause momentarily at the deepest stretch without relaxing active muscular contraction."
+        });
+      }
+
+      if (exVol > 0) {
+        highlights.push(`${ex.exercise_name}: ${Math.round(exVol).toLocaleString()} lbs moved across ${(ex.sets || []).length} sets`);
+      }
+    });
+
+    const muscleGroupVolumes = Object.entries(muscleMap)
+      .map(([k, v]) => ({ muscle_group: k, volume_lbs: Math.round(v * 10) / 10 }))
+      .sort((a, b) => b.volume_lbs - a.volume_lbs);
+
+    let strainRating = "light";
+    if (totalVol < 4000) strainRating = "light";
+    else if (totalVol < 12000) strainRating = "moderate";
+    else if (totalVol < 22000) strainRating = "high";
+    else strainRating = "excessive";
+
+    let workoutNotesFeedback = "";
+    if (fullSession.session_notes && fullSession.session_notes.trim()) {
+      workoutNotesFeedback = `Session Plan & Execution Review: You noted '${fullSession.session_notes.trim()}'. Your session demonstrated targeted intent with ${(fullSession.exercise_logs || []).length} exercises logged and ${Math.round(totalVol).toLocaleString()} lbs of mechanical work. Continuing to reflect on physical readiness and session objectives reinforces systematic strength development.`;
+    } else {
+      workoutNotesFeedback = `No workout notes were recorded for this session. Pro-tip: Jotting down your target focus, pre-workout energy, or planned RIR in the Workout Notes field enables the AI Coach to track mental readiness and adapt intensity recommendations.`;
+    }
+
+    const targetMuscleGroups = Object.keys(muscleMap);
+    return {
+      overall_assessment: `Completed ${(fullSession.exercise_logs || []).length} exercises across ${targetMuscleGroups.length} muscle groups generating ${Math.round(totalVol).toLocaleString()} lbs of total mechanical work. Training strain rated as ${strainRating}.`,
+      strain_rating: strainRating,
+      total_volume_lbs: totalVol,
+      target_muscle_groups: targetMuscleGroups,
+      muscle_group_volumes: muscleGroupVolumes,
+      workout_notes_feedback: workoutNotesFeedback,
+      progression_suggestions: progressionSuggestions,
+      form_cues: formCues,
+      highlights: highlights,
+      recovery_recommendations: `Hydrate with 500-750ml water enriched with electrolytes. Target 30-40g high-quality protein within 2 hours to initiate muscle protein synthesis for ${targetMuscleGroups.join(", ") || "worked muscles"}. Allow 48 hours before taxing these primary muscle groups with heavy compound loading again.`
+    };
+  }
+
+  // Render the generated AI insights into stunning HTML components
+  renderInsightsContent(insights, fullSession) {
+    const container = document.getElementById("insights-results-container");
+    if (!container) return;
+
+    // 1. Session Assessment & Workout Notes Feedback
+    const strainClass = (insights.strain_rating || "moderate").toLowerCase();
+    const strainLabel = (insights.strain_rating || "Moderate").toUpperCase();
+
+    const notesFeedbackHtml = `
+      <div class="insight-session-notes-feedback">
+        <span class="insight-notes-quote-title">Lifter's Session Notes &amp; Plan</span>
+        <p class="insight-notes-quote-body">${fullSession.session_notes ? `"${this.escapeHtml(fullSession.session_notes)}"` : `<span style="font-style: italic; color: var(--text-subtle);">No session notes recorded for this workout.</span>`}</p>
+        <p class="insight-notes-feedback-body">${this.escapeHtml(insights.workout_notes_feedback || "")}</p>
+      </div>
+    `;
+
+    // 2. Volume by Muscle Group
+    const totalVol = insights.total_volume_lbs || 0;
+    const muscleVols = insights.muscle_group_volumes || [];
+    const maxMuscleVol = muscleVols.length > 0 ? Math.max(...muscleVols.map((m) => m.volume_lbs)) : 1;
+
+    const muscleBarsHtml = muscleVols.length > 0
+      ? muscleVols.map((m) => {
+          const pct = Math.max(8, Math.round((m.volume_lbs / maxMuscleVol) * 100));
+          return `
+            <div class="muscle-bar-item">
+              <div class="muscle-bar-header">
+                <span class="muscle-bar-name">${this.escapeHtml(m.muscle_group)}</span>
+                <span class="muscle-bar-val">${Math.round(m.volume_lbs).toLocaleString()} lbs</span>
+              </div>
+              <div class="muscle-bar-track">
+                <div class="muscle-bar-fill" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join("")
+      : `<p class="category-empty-text">No muscle group volume calculated.</p>`;
+
+    // 3. Progressive Overload & Weight Suggestions
+    const progressionHtml = (insights.progression_suggestions && insights.progression_suggestions.length > 0)
+      ? insights.progression_suggestions.map((s) => {
+          const targetWeightStr = s.suggested_weight !== null && s.suggested_weight !== undefined
+            ? `${s.suggested_weight.toFixed(1)} lbs`
+            : "Maintain Load";
+          const setsRepsStr = s.suggested_reps ? ` &times; ${s.suggested_reps} reps` : "";
+
+          return `
+            <div class="progression-item-card">
+              <div class="progression-item-top">
+                <span class="progression-exercise-title">${this.escapeHtml(s.exercise_name)}</span>
+                <span class="progression-target-badge">Target: ${targetWeightStr}${setsRepsStr}</span>
+              </div>
+              <span class="progression-current-perf">Last Set: ${this.escapeHtml(s.current_performance || "")}</span>
+              <p class="progression-rec-text">${this.escapeHtml(s.recommendation)}</p>
+            </div>
+          `;
+        }).join("")
+      : `<p class="category-empty-text">No specific progression targets calculated.</p>`;
+
+    // 4. Form Cues & Maintenance Tips
+    const formCuesHtml = (insights.form_cues && insights.form_cues.length > 0)
+      ? insights.form_cues.map((c) => `
+          <div class="form-cue-item-card">
+            <span class="form-cue-title">${this.escapeHtml(c.exercise_name)}</span>
+            <span class="form-cue-obs">${this.escapeHtml(c.observation)}</span>
+            <p class="form-cue-cue">Cue: &ldquo;${this.escapeHtml(c.form_cue)}&rdquo;</p>
+            <p class="form-cue-tip">Maintenance Tip: ${this.escapeHtml(c.maintenance_tip)}</p>
+          </div>
+        `).join("")
+      : `<p class="category-empty-text">Strict form maintained across all recorded sets.</p>`;
+
+    // 5. Highlights and Recovery
+    const highlightsHtml = (insights.highlights && insights.highlights.length > 0)
+      ? `<ul class="highlights-bullet-list">
+          ${insights.highlights.map((h) => `<li>${this.escapeHtml(h)}</li>`).join("")}
+        </ul>`
+      : "";
+
+    container.innerHTML = `
+      <!-- Assessment & Notes Card -->
+      <div class="insight-card-section">
+        <div class="insight-card-title-row">
+          <span class="insight-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4M12 8h.01"></path>
+            </svg>
+            Session Assessment &amp; Plan
+          </span>
+          <span class="strain-pill ${strainClass}">${strainLabel} STRAIN</span>
+        </div>
+        <p class="insight-assessment-text">${this.escapeHtml(insights.overall_assessment)}</p>
+        ${notesFeedbackHtml}
+      </div>
+
+      <!-- Volume by Muscle Group Card -->
+      <div class="insight-card-section">
+        <div class="insight-card-title-row">
+          <span class="insight-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            Volume by Muscle Group (${Math.round(totalVol).toLocaleString()} lbs Total)
+          </span>
+        </div>
+        <div class="muscle-volume-bars">
+          ${muscleBarsHtml}
+        </div>
+      </div>
+
+      <!-- Progressive Overload Targets Card -->
+      <div class="insight-card-section">
+        <div class="insight-card-title-row">
+          <span class="insight-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+              <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+            Next Workout Progression &amp; Weight Targets
+          </span>
+        </div>
+        <div class="progression-list">
+          ${progressionHtml}
+        </div>
+      </div>
+
+      <!-- Form Cues & Maintenance Tips Card -->
+      <div class="insight-card-section">
+        <div class="insight-card-title-row">
+          <span class="insight-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+            Biomechanical Form Cues &amp; Tips
+          </span>
+        </div>
+        <div class="form-cues-list">
+          ${formCuesHtml}
+        </div>
+      </div>
+
+      <!-- Highlights & Recovery Card -->
+      <div class="insight-card-section">
+        <div class="insight-card-title-row">
+          <span class="insight-card-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M18 8h1a4 4 0 0 1 0 8h-1"></path>
+              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"></path>
+              <line x1="6" y1="1" x2="6" y2="4"></line>
+              <line x1="10" y1="1" x2="10" y2="4"></line>
+              <line x1="14" y1="1" x2="14" y2="4"></line>
+            </svg>
+            Session Standouts &amp; Recovery
+          </span>
+        </div>
+        ${highlightsHtml}
+        <p class="recovery-text">${this.escapeHtml(insights.recovery_recommendations)}</p>
+      </div>
     `;
   }
 }

@@ -112,11 +112,34 @@ class CoachWorkoutFeedbackRequest(BaseModel):
     duration_minutes: int | None = None
     exercises: list[CoachExerciseFeedbackRequest] = []
 
+class MuscleGroupVolume(BaseModel):
+    muscle_group: str
+    volume_lbs: float
+
+class ExerciseProgressionSuggestion(BaseModel):
+    exercise_name: str
+    current_performance: str = ""
+    suggested_weight: float | None = None
+    suggested_reps: int | None = None
+    suggested_sets: int | None = None
+    recommendation: str = ""
+
+class ExerciseFormCue(BaseModel):
+    exercise_name: str
+    form_cue: str = ""
+    observation: str = ""
+    maintenance_tip: str = ""
+
 class CoachWorkoutFeedbackResponse(BaseModel):
     overall_assessment: str
     strain_rating: str  # "light", "moderate", "high", "excessive"
     total_volume_lbs: float = 0.0  # Sum of (weight * reps) across working sets
     target_muscle_groups: list[str] = []  # e.g., ["Chest", "Shoulders", "Triceps"]
+    muscle_group_volumes: list[MuscleGroupVolume] = []
+    workout_notes_feedback: str | None = None
+    progression_suggestions: list[ExerciseProgressionSuggestion] = []
+    form_cues: list[ExerciseFormCue] = []
     highlights: list[str] = []
     recovery_recommendations: str
+
 
