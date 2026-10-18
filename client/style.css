@@ -249,6 +249,7 @@ body {
   flex-direction: column;
   gap: 16px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  margin-bottom: 20px;
 }
 
 .session-card-header {
@@ -1696,10 +1697,13 @@ body {
 }
 
 /* Save Set Double-Tap Protection Button States */
-#btn-save-set:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  pointer-events: none;
+#btn-save-set:disabled,
+#btn-save-set.btn-disabled,
+#btn-save-set.btn-saving,
+#btn-save-set.btn-saved-success {
+  opacity: 0.65;
+  cursor: not-allowed !important;
+  pointer-events: none !important;
 }
 
 .card-vol-badge {
