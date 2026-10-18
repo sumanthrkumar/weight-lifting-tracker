@@ -2484,6 +2484,10 @@ class WorkoutApp {
         this.displaySelectedWorkoutInsights(w.id);
       });
 
+      if (isSelected) {
+        setTimeout(() => chip.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" }), 50);
+      }
+
       selectorScroll.appendChild(chip);
     }
 
