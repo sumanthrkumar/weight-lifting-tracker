@@ -561,16 +561,19 @@
             <button type="submit" class="btn btn-primary" style="flex: 2;">Save Changes</button>
           </div>
         </form>
+      </div>
+    </div>
+
     <!-- Modal: Edit Workout Notes -->
     <div id="modal-edit-workout-notes" class="modal-overlay hidden">
       <div class="modal-sheet">
         <div class="modal-header">
           <h2>Edit Workout Notes</h2>
-          <button id="btn-close-notes-modal" class="icon-btn">&times;</button>
+          <button type="button" id="btn-close-notes-modal" class="icon-btn">&times;</button>
         </div>
         <form id="form-edit-workout-notes" class="modal-form">
           <input type="hidden" id="edit-session-notes-id">
-          <label id="edit-session-notes-title-label">Session Notes &amp; Plan</label>
+          <label id="edit-session-notes-title-label" for="edit-session-notes-text">Session Notes &amp; Plan</label>
           <textarea id="edit-session-notes-text" class="form-input" rows="4" placeholder="Add or update session notes, goals, or reflections..."></textarea>
           <button type="submit" class="btn btn-primary btn-block mt-4">Save Notes</button>
         </form>

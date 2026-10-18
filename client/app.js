@@ -1915,11 +1915,36 @@ class WorkoutApp {
         : 0;
       const totalExercises = full.exercise_logs ? full.exercise_logs.length : 0;
 
+      // Total volume and per-muscle-group breakdown for this historical workout
+      const { totalVolume: historyTotalVol, muscleVolumes: historyMuscleVols } = this.computeSessionVolume(full);
+
       const summaryMeta = [
         `${totalExercises} exercise${totalExercises !== 1 ? "s" : ""}`,
         `${totalSets} set${totalSets !== 1 ? "s" : ""}`,
+        `${Math.round(historyTotalVol).toLocaleString()} lbs`,
         durationStr
       ].filter(Boolean).join(" &bull; ");
+
+      const historyVolumeHtml = `
+        <div class="volume-panel history-volume-panel">
+          <div class="volume-title-group">
+            <span class="volume-panel-title">TOTAL WORKOUT VOLUME</span>
+            <span class="volume-total-number">${Math.round(historyTotalVol).toLocaleString()} lbs</span>
+          </div>
+          <div class="category-breakdown-section">
+            <span class="category-section-title">Volume by Muscle Group</span>
+            <div class="category-breakdown-grid">
+              ${historyMuscleVols.length > 0
+                ? historyMuscleVols.map((m) => `
+                  <div class="category-chip">
+                    <span class="category-chip-name">${this.escapeHtml(m.muscle_group)}</span>
+                    <span class="category-chip-vol">${Math.round(m.volume_lbs).toLocaleString()} lbs</span>
+                  </div>`).join("")
+                : `<span class="category-empty-text">No volume recorded</span>`}
+            </div>
+          </div>
+        </div>
+      `;
 
       const exerciseBreakdownHtml = (full.exercise_logs && full.exercise_logs.length > 0)
         ? full.exercise_logs.map((log) => {
@@ -1990,6 +2015,7 @@ class WorkoutApp {
           </div>
         </div>
         <div class="history-card-details">
+          ${historyVolumeHtml}
           <div class="history-session-notes-box">
             <div class="history-session-notes-header">
               <span class="history-notes-label">
@@ -2279,6 +2305,56 @@ class WorkoutApp {
     }
   }
 
+  // Shows local IndexedDB record counts in the AI Insights system status card
+  async updateDiagnostics() {
+    const el = document.getElementById("storage-diagnostics");
+    if (!el) return;
+
+    const exercises = await localDB.getAll("exercises");
+    const sessions = await localDB.getAll("workout_sessions");
+    const logs = await localDB.getAll("exercise_logs");
+    const sets = await localDB.getAll("set_entries");
+
+    el.innerHTML = `
+      Local IndexedDB records:<br>
+      &bull; Exercises: ${exercises.length}<br>
+      &bull; Sessions: ${sessions.length} (${sessions.filter((s) => s.synced).length} synced)<br>
+      &bull; Logs: ${logs.length}<br>
+      &bull; Sets: ${sets.length}
+    `;
+  }
+
+  // Sums weight * reps for a full session, overall and per muscle group (sorted high to low)
+  computeSessionVolume(fullSession) {
+    let totalVolume = 0;
+    const map = {};
+    (fullSession.exercise_logs || []).forEach((log) => {
+      const mg = log.target_muscle_group || "Other";
+      (log.sets || []).forEach((s) => {
+        const v = (s.weight || 0) * (s.reps || 0);
+        totalVolume += v;
+        map[mg] = (map[mg] || 0) + v;
+      });
+    });
+    const muscleVolumes = Object.entries(map)
+      .map(([muscle_group, volume_lbs]) => ({ muscle_group, volume_lbs }))
+      .sort((a, b) => b.volume_lbs - a.volume_lbs);
+    return { totalVolume, muscleVolumes };
+  }
+
+  // Fingerprint of everything the coach looks at; cached insights are reused only if it matches
+  computeInsightsSignature(fullSession) {
+    return JSON.stringify({
+      n: fullSession.name || "",
+      sn: fullSession.session_notes || "",
+      l: (fullSession.exercise_logs || []).map((l) => [
+        l.exercise_id,
+        l.notes || "",
+        (l.sets || []).map((s) => [s.weight, s.reps, s.rir, s.notes || ""])
+      ])
+    });
+  }
+
   // Open modal to add or edit workout notes on a session
   openEditWorkoutNotesModal(session) {
     const modal = document.getElementById("modal-edit-workout-notes");
@@ -2447,8 +2523,8 @@ class WorkoutApp {
       metaEl.textContent = `${dateDisplay} • ${totalExercises} exercise${totalExercises !== 1 ? "s" : ""} • ${totalSets} set${totalSets !== 1 ? "s" : ""}`;
     }
 
-    // If session has cached insights, render immediately
-    if (fullSession.ai_insights) {
+    // Reuse cached insights only if the workout has not changed since they were generated
+    if (fullSession.ai_insights && fullSession.ai_insights_signature === this.computeInsightsSignature(fullSession)) {
       this.renderInsightsContent(fullSession.ai_insights, fullSession);
       return;
     }
@@ -2476,6 +2552,10 @@ class WorkoutApp {
 
     const fullSession = await localDB.getFullSession(sessionId);
     if (!fullSession) return;
+
+    // Token guards against an older, slower request overwriting a newer selection
+    this.insightsRequestToken = (this.insightsRequestToken || 0) + 1;
+    const requestToken = this.insightsRequestToken;
 
     // Show loading state
     if (runBtn) {
@@ -2528,13 +2608,16 @@ class WorkoutApp {
     let insights = null;
     let engineSource = "Cloud Coach";
 
-    // Attempt server request
+    // Attempt server request (time-boxed so the UI never hangs)
     if (navigator.onLine) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       try {
         const res = await fetch(`${API_BASE_URL}/coach/workout`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payload),
+          signal: controller.signal
         });
         if (res.ok) {
           insights = await res.json();
@@ -2542,6 +2625,8 @@ class WorkoutApp {
         }
       } catch (err) {
         console.warn("Server AI coach error, using deterministic engine:", err);
+      } finally {
+        clearTimeout(timeoutId);
       }
     }
 
@@ -2555,9 +2640,16 @@ class WorkoutApp {
       engineBadge.textContent = engineSource;
     }
 
-    // Cache insights on session in IndexedDB
-    fullSession.ai_insights = insights;
-    await localDB.put("workout_sessions", fullSession);
+    // Cache insights on the stored session record only (never write nested logs back)
+    const storedSession = await localDB.get("workout_sessions", sessionId);
+    if (storedSession) {
+      storedSession.ai_insights = insights;
+      storedSession.ai_insights_signature = this.computeInsightsSignature(fullSession);
+      await localDB.put("workout_sessions", storedSession);
+    }
+
+    // A newer request superseded this one; drop the result
+    if (requestToken !== this.insightsRequestToken) return;
 
     if (runBtn) {
       runBtn.disabled = false;
@@ -2587,7 +2679,7 @@ class WorkoutApp {
       let bestSet = null;
       const rirs = [];
       const allNotes = [];
-      if (ex.notes) allNotes.append ? allNotes.append(ex.notes) : allNotes.push(ex.notes);
+      if (ex.notes) allNotes.push(ex.notes);
 
       (ex.sets || []).forEach((s) => {
         const vol = (s.weight || 0) * (s.reps || 0);

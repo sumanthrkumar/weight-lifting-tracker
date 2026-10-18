@@ -1,9 +1,7 @@
-1. Total Volume tracker. At both Set level and Workout level. Break it down into categories at exercise level. For example: Biceps total: 100lbs, Back total: 1500 lbs.
+1. Ai Insights tab doesn't work at all. 
 
-2. Ability to edit a set after it has been saved in the UI. I can delete it but I would like to be able to edit it as well. 
+2. I can't add notes to historical workouts.
 
-3. Apply double tap protection to disable the Save button when saving sets. 
+3. I want to see total volume and total volume breakdown per muscle group for historical workouts.
 
-4. I want the Ai Insights tab to be smarter. I want to be able to tap a workout and it can provide me some basic feedback on the workout. Tell me total volume per muscle group, based on my notes and RIR, if I should improve my weights or sets for the next time I do a similar workout. Suggest weights for next times workout. Give me any form queues if needed based on notes on form breakdown and how heavy the weight feels. Also any tips to maintain that form
-
-5. I have no ability to add notes to a workout at all. Also there is no AI Insight at a workout level for any notes I have or any plans I have for the workout
+4. Clicking Ai insights on a historical workout takes me to the ai insights tab but that doedsn't do anything.

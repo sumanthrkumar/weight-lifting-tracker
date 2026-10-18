@@ -2320,3 +2320,14 @@ body {
 }
 
 
+
+/* Compact volume panel inside expanded history cards */
+.history-volume-panel {
+  margin: 4px 0 12px;
+  padding: 12px 14px;
+  gap: 10px;
+}
+
+.history-volume-panel .volume-total-number {
+  font-size: 1.3rem;
+}

@@ -11,7 +11,13 @@ def get_client() -> genai.Client:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="GEMINI_API_KEY is not set in the environment."
         )
-    return genai.Client(api_key=api_key)
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=20000,  # milliseconds
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
 
 def generate_deterministic_exercise_feedback(payload: schemas.CoachExerciseFeedbackRequest) -> schemas.CoachExerciseFeedbackResponse:
     if not payload.completed_sets:
