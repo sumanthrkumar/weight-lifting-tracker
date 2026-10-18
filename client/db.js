@@ -121,9 +121,10 @@ class LocalDatabase {
       sets.sort((a, b) => a.set_number - b.set_number);
       log.sets = sets;
 
-      // Populate exercise name if available
+      // Populate exercise name and category if available
       const exercise = await this.get("exercises", log.exercise_id);
       log.exercise_name = exercise ? exercise.name : (log.exercise_name || "Exercise");
+      log.target_muscle_group = exercise ? (exercise.target_muscle_group || "Other") : "Other";
     }
 
     session.exercise_logs = logs;

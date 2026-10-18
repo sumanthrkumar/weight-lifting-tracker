@@ -222,6 +222,8 @@ class WorkoutApp {
     this.currentFilterMuscle = "all";
     this.currentExerciseRestSeconds = 90;
     this.restTimer = new RestTimerManager(this);
+    this.isSavingSet = false;
+    this.editingSetId = null;
   }
 
   async init() {
@@ -593,13 +595,31 @@ class WorkoutApp {
     this.bindStepper("btn-reps-minus", "btn-reps-plus", "input-reps", -1, 1);
     this.bindStepper("btn-rir-minus", "btn-rir-plus", "input-rir", -1, 1);
 
-    // Save Set
+    // Save / Update Set
     document.getElementById("btn-save-set").addEventListener("click", async () => {
       await this.saveCurrentSet();
     });
 
+    // Cancel Edit Set Buttons
+    const cancelEditBtn = document.getElementById("btn-cancel-edit-set");
+    if (cancelEditBtn) {
+      cancelEditBtn.addEventListener("click", () => {
+        this.cancelEditSet();
+      });
+    }
+
+    const cancelEditBannerBtn = document.getElementById("btn-cancel-edit-banner");
+    if (cancelEditBannerBtn) {
+      cancelEditBannerBtn.addEventListener("click", () => {
+        this.cancelEditSet();
+      });
+    }
+
     // Clear Set
     document.getElementById("btn-clear-set").addEventListener("click", () => {
+      if (this.editingSetId) {
+        this.cancelEditSet();
+      }
       document.getElementById("input-weight").value = "135.0";
       document.getElementById("input-reps").value = "5";
       document.getElementById("input-rir").value = "2";
@@ -988,6 +1008,53 @@ class WorkoutApp {
     const nameInput = document.getElementById("session-name-input");
     if (nameInput) nameInput.value = fullSession.name || "Freeform Workout";
 
+    // Calculate workout volume and category breakdown
+    let totalWorkoutVolume = 0;
+    const categoryVolumeMap = {};
+
+    if (fullSession.exercise_logs && fullSession.exercise_logs.length > 0) {
+      fullSession.exercise_logs.forEach((log) => {
+        const muscleGroup = log.target_muscle_group || "Other";
+        let logVol = 0;
+        if (log.sets && log.sets.length > 0) {
+          log.sets.forEach((s) => {
+            logVol += (s.weight || 0) * (s.reps || 0);
+          });
+        }
+        log.totalVolume = logVol;
+        totalWorkoutVolume += logVol;
+        categoryVolumeMap[muscleGroup] = (categoryVolumeMap[muscleGroup] || 0) + logVol;
+      });
+    }
+
+    // Render Workout Total Volume
+    const totalVolEl = document.getElementById("workout-total-volume");
+    if (totalVolEl) {
+      totalVolEl.textContent = `${Math.round(totalWorkoutVolume).toLocaleString()} lbs`;
+    }
+
+    // Render Muscle Group Category Breakdown
+    const breakdownEl = document.getElementById("workout-category-breakdown");
+    if (breakdownEl) {
+      breakdownEl.innerHTML = "";
+      const categories = Object.keys(categoryVolumeMap);
+      if (categories.length === 0 || totalWorkoutVolume === 0) {
+        breakdownEl.innerHTML = `<span class="category-empty-text">No sets logged yet. Complete sets to see category distribution.</span>`;
+      } else {
+        categories.sort((a, b) => categoryVolumeMap[b] - categoryVolumeMap[a]);
+        categories.forEach((cat) => {
+          const vol = categoryVolumeMap[cat];
+          const chip = document.createElement("div");
+          chip.className = "category-chip";
+          chip.innerHTML = `
+            <span class="category-chip-name">${this.escapeHtml(cat)}:</span>
+            <span class="category-chip-vol">${Math.round(vol).toLocaleString()} lbs</span>
+          `;
+          breakdownEl.appendChild(chip);
+        });
+      }
+    }
+
     if (!fullSession.exercise_logs || fullSession.exercise_logs.length === 0) {
       container.innerHTML = `
         <div class="empty-state">
@@ -1003,6 +1070,7 @@ class WorkoutApp {
 
       const totalSets = log.sets ? log.sets.length : 0;
       const totalReps = log.sets ? log.sets.reduce((sum, s) => sum + s.reps, 0) : 0;
+      const logVol = log.totalVolume || 0;
       const noteHtml = log.notes
         ? `<p class="exercise-card-note">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1016,7 +1084,7 @@ class WorkoutApp {
       card.innerHTML = `
         <div class="exercise-card-info">
           <h4>${log.exercise_name}</h4>
-          <p>${log.exercise_name} &bull; Total: ${totalSets} sets &bull; Total ${totalReps} reps</p>
+          <p>${log.exercise_name} &bull; ${totalSets} sets &bull; ${totalReps} reps &bull; <span class="card-vol-badge">${Math.round(logVol).toLocaleString()} lbs vol</span></p>
           ${noteHtml}
         </div>
         <button class="icon-btn" aria-label="Open">
@@ -1083,6 +1151,7 @@ class WorkoutApp {
 
   // Opens the exercise set logger (Screen 2 Mockup)
   async openExerciseLogger(log, pushHistory = true) {
+    this.cancelEditSet(false);
     this.activeLog = log;
     localStorage.setItem("active_log_id", log.id);
     this.switchView("view-logger", pushHistory);
@@ -1191,6 +1260,13 @@ class WorkoutApp {
     const list = document.getElementById("logged-sets-list");
     list.innerHTML = "";
 
+    // Exercise-level total volume calculation
+    const totalExVol = sets.reduce((sum, s) => sum + ((s.weight || 0) * (s.reps || 0)), 0);
+    const exVolEl = document.getElementById("exercise-total-volume");
+    if (exVolEl) {
+      exVolEl.textContent = `${Math.round(totalExVol).toLocaleString()} lbs`;
+    }
+
     if (sets.length === 0) {
       list.innerHTML = `<div class="empty-state"><p>No sets logged yet. Select weight and reps, then tap "SAVE SET".</p></div>`;
       this.updateAICoachCard(0);
@@ -1200,7 +1276,11 @@ class WorkoutApp {
     sets.forEach((set) => {
       const card = document.createElement("div");
       card.className = "set-item-card";
+      if (this.editingSetId === set.id) {
+        card.classList.add("is-editing");
+      }
 
+      const setVol = Math.round((set.weight || 0) * (set.reps || 0));
       const rirText = set.rir !== null && set.rir !== undefined ? `${set.rir} RIR` : "";
       const noteHtml = set.notes
         ? `<div class="set-note-preview">
@@ -1218,8 +1298,17 @@ class WorkoutApp {
           </div>
           <div class="set-stat">${set.weight.toFixed(1)} lbs</div>
           <div class="set-stat">${set.reps} reps</div>
+          <div class="set-stat volume-stat">${setVol.toLocaleString()} lbs vol</div>
           ${rirText ? `<div class="set-stat rir-stat">${rirText}</div>` : ""}
-          <button class="set-delete-btn" aria-label="Delete set">&times;</button>
+          <div class="set-actions">
+            <button class="set-edit-btn" aria-label="Edit set" title="Edit set">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button class="set-delete-btn" aria-label="Delete set" title="Delete set">&times;</button>
+          </div>
         </div>
         ${noteHtml}
       `;
@@ -1242,8 +1331,16 @@ class WorkoutApp {
         }
       }
 
+      card.querySelector(".set-edit-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.startEditSet(set);
+      });
+
       card.querySelector(".set-delete-btn").addEventListener("click", async (e) => {
         e.stopPropagation();
+        if (this.editingSetId === set.id) {
+          this.cancelEditSet(false);
+        }
         await localDB.delete("set_entries", set.id);
         await this.renderLoggedSets();
         this.renderWorkoutOverview();
@@ -1253,6 +1350,64 @@ class WorkoutApp {
     });
 
     this.updateAICoachCard(sets.length);
+  }
+
+  startEditSet(set) {
+    this.editingSetId = set.id;
+
+    const weightInput = document.getElementById("input-weight");
+    if (weightInput) weightInput.value = (set.weight !== undefined && set.weight !== null) ? set.weight : "135.0";
+
+    const repsInput = document.getElementById("input-reps");
+    if (repsInput) repsInput.value = (set.reps !== undefined && set.reps !== null) ? set.reps : "5";
+
+    const rirInput = document.getElementById("input-rir");
+    if (rirInput) rirInput.value = (set.rir !== null && set.rir !== undefined) ? set.rir : "2";
+
+    const notesInput = document.getElementById("input-set-notes");
+    if (notesInput) notesInput.value = set.notes || "";
+
+    const banner = document.getElementById("editing-set-banner");
+    if (banner) banner.classList.remove("hidden");
+
+    const numLabel = document.getElementById("editing-set-number-label");
+    if (numLabel) numLabel.textContent = set.set_number;
+
+    const saveBtn = document.getElementById("btn-save-set");
+    if (saveBtn) {
+      saveBtn.textContent = "UPDATE SET";
+      saveBtn.classList.remove("btn-saved-success");
+    }
+
+    const cancelBtn = document.getElementById("btn-cancel-edit-set");
+    if (cancelBtn) cancelBtn.classList.remove("hidden");
+
+    this.renderLoggedSets();
+
+    const stepperBox = document.querySelector(".stepper-box");
+    if (stepperBox) {
+      stepperBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
+  cancelEditSet(reRender = true) {
+    this.editingSetId = null;
+
+    const banner = document.getElementById("editing-set-banner");
+    if (banner) banner.classList.add("hidden");
+
+    const saveBtn = document.getElementById("btn-save-set");
+    if (saveBtn) {
+      saveBtn.textContent = "SAVE SET";
+      saveBtn.classList.remove("btn-saved-success");
+    }
+
+    const cancelBtn = document.getElementById("btn-cancel-edit-set");
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+
+    if (reRender) {
+      this.renderLoggedSets();
+    }
   }
 
   updateAICoachCard(totalSets) {
@@ -1322,62 +1477,126 @@ class WorkoutApp {
 
   async saveCurrentSet() {
     if (!this.activeLog) return;
+    if (this.isSavingSet) return;
 
-    const weight = parseFloat(document.getElementById("input-weight").value) || 0;
-    const reps = parseInt(document.getElementById("input-reps").value, 10) || 1;
-    const rirVal = document.getElementById("input-rir").value;
-    const rir = rirVal !== "" ? parseInt(rirVal, 10) : null;
-    const setNotesInput = document.getElementById("input-set-notes");
-    const setNotes = setNotesInput ? setNotesInput.value.trim() : "";
-
-    const existingSets = await localDB.getByIndex("set_entries", "exercise_log_id", this.activeLog.id);
-    const nextSetNumber = existingSets.length + 1;
-
-    const newSet = {
-      id: crypto.randomUUID(),
-      exercise_log_id: this.activeLog.id,
-      set_number: nextSetNumber,
-      set_type: "normal",
-      weight: weight,
-      reps: reps,
-      rir: rir,
-      completed: true,
-      notes: setNotes.length > 0 ? setNotes : null
-    };
-
-    await localDB.put("set_entries", newSet);
-    if (setNotesInput) {
-      setNotesInput.value = "";
-    }
-    await this.renderLoggedSets();
-    this.renderWorkoutOverview();
-
-    // Button micro-interaction: green checkmark and "SAVED"
     const saveBtn = document.getElementById("btn-save-set");
-    if (saveBtn) {
-      if (this.saveBtnTimeout) {
-        clearTimeout(this.saveBtnTimeout);
+
+    try {
+      this.isSavingSet = true;
+      if (saveBtn) {
+        saveBtn.disabled = true;
       }
-      saveBtn.classList.add("btn-saved-success");
-      saveBtn.innerHTML = `
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="20 6 9 17 4 12"></polyline>
-        </svg>
-        <span>SAVED</span>
-      `;
-      this.saveBtnTimeout = setTimeout(() => {
-        saveBtn.classList.remove("btn-saved-success");
-        saveBtn.innerHTML = "SAVE SET";
-        this.saveBtnTimeout = null;
-      }, 1200);
+
+      const weight = parseFloat(document.getElementById("input-weight").value) || 0;
+      const reps = parseInt(document.getElementById("input-reps").value, 10) || 1;
+      const rirVal = document.getElementById("input-rir").value;
+      const rir = rirVal !== "" ? parseInt(rirVal, 10) : null;
+      const setNotesInput = document.getElementById("input-set-notes");
+      const setNotes = setNotesInput ? setNotesInput.value.trim() : "";
+
+      if (this.editingSetId) {
+        // Update existing set entry
+        const existingSet = await localDB.get("set_entries", this.editingSetId);
+        if (existingSet) {
+          existingSet.weight = weight;
+          existingSet.reps = reps;
+          existingSet.rir = rir;
+          existingSet.notes = setNotes.length > 0 ? setNotes : null;
+
+          await localDB.put("set_entries", existingSet);
+
+          if (setNotesInput) {
+            setNotesInput.value = "";
+          }
+
+          const setNum = existingSet.set_number;
+          this.cancelEditSet(false);
+
+          await this.renderLoggedSets();
+          this.renderWorkoutOverview();
+
+          // Button micro-interaction: green checkmark and "UPDATED"
+          if (saveBtn) {
+            if (this.saveBtnTimeout) {
+              clearTimeout(this.saveBtnTimeout);
+            }
+            saveBtn.classList.add("btn-saved-success");
+            saveBtn.innerHTML = `
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span>UPDATED</span>
+            `;
+            this.saveBtnTimeout = setTimeout(() => {
+              saveBtn.classList.remove("btn-saved-success");
+              saveBtn.innerHTML = "SAVE SET";
+              this.saveBtnTimeout = null;
+            }, 1200);
+          }
+
+          this.showToast(`Set ${setNum} Updated (${weight.toFixed(1)} lbs × ${reps} reps)`);
+        } else {
+          this.cancelEditSet(false);
+        }
+      } else {
+        // Create new set entry
+        const existingSets = await localDB.getByIndex("set_entries", "exercise_log_id", this.activeLog.id);
+        const nextSetNumber = existingSets.length + 1;
+
+        const newSet = {
+          id: crypto.randomUUID(),
+          exercise_log_id: this.activeLog.id,
+          set_number: nextSetNumber,
+          set_type: "normal",
+          weight: weight,
+          reps: reps,
+          rir: rir,
+          completed: true,
+          notes: setNotes.length > 0 ? setNotes : null
+        };
+
+        await localDB.put("set_entries", newSet);
+        if (setNotesInput) {
+          setNotesInput.value = "";
+        }
+        await this.renderLoggedSets();
+        this.renderWorkoutOverview();
+
+        // Button micro-interaction: green checkmark and "SAVED"
+        if (saveBtn) {
+          if (this.saveBtnTimeout) {
+            clearTimeout(this.saveBtnTimeout);
+          }
+          saveBtn.classList.add("btn-saved-success");
+          saveBtn.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            <span>SAVED</span>
+          `;
+          this.saveBtnTimeout = setTimeout(() => {
+            saveBtn.classList.remove("btn-saved-success");
+            saveBtn.innerHTML = "SAVE SET";
+            this.saveBtnTimeout = null;
+          }, 1200);
+        }
+
+        // Floating toast confirmation
+        this.showToast(`Set ${nextSetNumber} Saved (${weight.toFixed(1)} lbs × ${reps} reps)`);
+
+        // Auto-start custom rest timer for this exercise
+        const restSecs = this.currentExerciseRestSeconds || 90;
+        this.restTimer.start(restSecs, this.activeLog.exercise_name);
+      }
+    } catch (err) {
+      console.error("Error saving set:", err);
+      this.showToast("Failed to save set", "error");
+    } finally {
+      this.isSavingSet = false;
+      if (saveBtn) {
+        saveBtn.disabled = false;
+      }
     }
-
-    // Floating toast confirmation
-    this.showToast(`Set ${nextSetNumber} Saved (${weight.toFixed(1)} lbs × ${reps} reps)`);
-
-    // Auto-start custom rest timer for this exercise
-    const restSecs = this.currentExerciseRestSeconds || 90;
-    this.restTimer.start(restSecs, this.activeLog.exercise_name);
   }
 
   async renderExerciseHistoryTab() {
@@ -1509,6 +1728,14 @@ class WorkoutApp {
     const uniqueSessions = [];
     const duplicateIdsToDelete = [];
 
+    const parseUtcTime = (dt) => {
+      if (!dt) return 0;
+      const str = (typeof dt === "string" && !dt.endsWith("Z") && !dt.includes("+") && !dt.includes("-", 10))
+        ? dt + "Z"
+        : dt;
+      return new Date(str).getTime();
+    };
+
     for (const s of completed) {
       if (seenIds.has(s.id)) {
         duplicateIdsToDelete.push(s.id);
@@ -1516,18 +1743,27 @@ class WorkoutApp {
       }
       seenIds.add(s.id);
 
-      const timeKey = s.started_at ? new Date(s.started_at).getTime() : 0;
+      const timeKey = parseUtcTime(s.started_at);
       let isDuplicateTime = false;
-      for (const [existingTime] of seenTimestamps.entries()) {
-        if (Math.abs(existingTime - timeKey) < 5000) {
+      for (const [existingTime, existingSession] of seenTimestamps.entries()) {
+        if (Math.abs(existingTime - timeKey) < 60000) {
           isDuplicateTime = true;
-          duplicateIdsToDelete.push(s.id);
+          if (!s.synced && existingSession.synced) {
+            duplicateIdsToDelete.push(s.id);
+          } else if (s.synced && !existingSession.synced) {
+            duplicateIdsToDelete.push(existingSession.id);
+            const idx = uniqueSessions.findIndex((us) => us.id === existingSession.id);
+            if (idx !== -1) uniqueSessions[idx] = s;
+            seenTimestamps.set(timeKey, s);
+          } else {
+            duplicateIdsToDelete.push(s.id);
+          }
           break;
         }
       }
 
       if (!isDuplicateTime) {
-        seenTimestamps.set(timeKey, s.id);
+        seenTimestamps.set(timeKey, s);
         uniqueSessions.push(s);
       }
     }

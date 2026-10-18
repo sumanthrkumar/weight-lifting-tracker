@@ -1,6 +1,6 @@
 import uuid
-from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from pydantic import BaseModel, ConfigDict, field_serializer
+from datetime import datetime, timezone
 
 # Base schema with shared fields
 class ExerciseBase(BaseModel):
@@ -77,6 +77,14 @@ class WorkoutSessionResponse(WorkoutSessionBase):
     exercise_logs: list[ExerciseLogResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_serializer("started_at", "completed_at")
+    def serialize_datetime(self, dt: datetime | None, _info) -> str | None:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat().replace("+00:00", "Z")
 
 # Top-level batch sync payload from client
 class SyncPayload(BaseModel):

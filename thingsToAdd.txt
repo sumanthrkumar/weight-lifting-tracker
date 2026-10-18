@@ -1,0 +1,5 @@
+1. Total Volume tracker. At both Set level and Workout level. Break it down into categories at exercise level. For example: Biceps total: 100lbs, Back total: 1500 lbs.
+
+2. Ability to edit a set after it has been saved in the UI. I can delete it but I would like to be able to edit it as well. 
+
+3. Apply double tap protection to disable the Save button when saving sets. 

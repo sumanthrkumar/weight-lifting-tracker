@@ -1491,3 +1491,219 @@ body {
   border-color: var(--border-light);
   color: var(--text-main);
 }
+
+/* ============================================== */
+/* Volume Tracker & Category Breakdown Styles    */
+/* ============================================== */
+
+.volume-panel {
+  background: linear-gradient(145deg, #282420, #201e1c);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.volume-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.volume-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.volume-panel-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent-tan);
+  text-transform: uppercase;
+}
+
+.volume-total-number {
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+}
+
+.category-breakdown-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 10px;
+}
+
+.category-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.category-breakdown-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.category-chip {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 5px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  transition: all 0.15s;
+}
+
+.category-chip:hover {
+  border-color: var(--accent-tan);
+  background: rgba(200, 162, 122, 0.1);
+}
+
+.category-chip-name {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.category-chip-vol {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.category-empty-text {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  font-style: italic;
+}
+
+/* Exercise Logger Volume Badge */
+.exercise-volume-badge-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(217, 155, 68, 0.08);
+  border: 1px solid rgba(217, 155, 68, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin-bottom: 14px;
+}
+
+.ex-vol-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-tan);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ex-vol-stat {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--accent-gold);
+}
+
+/* Set Row Actions and Volume Stat */
+.set-stat.volume-stat {
+  font-size: 0.75rem;
+  color: var(--accent-tan);
+  font-weight: 600;
+  background: rgba(200, 162, 122, 0.08);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.set-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.set-edit-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-subtle);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.set-edit-btn:hover {
+  color: var(--accent-gold);
+  background: rgba(217, 155, 68, 0.15);
+}
+
+/* Edit Set Banner & Highlighting */
+.editing-set-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(217, 155, 68, 0.15);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.editing-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.btn-cancel-edit-banner {
+  background: var(--bg-control);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-cancel-edit-banner:hover {
+  color: var(--text-main);
+  border-color: var(--border-light);
+}
+
+.set-item-card.is-editing {
+  border-color: var(--accent-gold);
+  background: rgba(217, 155, 68, 0.05);
+  box-shadow: 0 0 10px rgba(217, 155, 68, 0.2);
+}
+
+/* Save Set Double-Tap Protection Button States */
+#btn-save-set:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.card-vol-badge {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+

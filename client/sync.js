@@ -107,12 +107,51 @@ class SyncManager {
       if (!response.ok) throw new Error("Failed to fetch sessions");
 
       const sessions = await response.json();
+      const localSessions = await this.db.getAll("workout_sessions");
+
+      const parseUtcTime = (dt) => {
+        if (!dt) return 0;
+        const s = (typeof dt === "string" && !dt.endsWith("Z") && !dt.includes("+") && !dt.includes("-", 10))
+          ? dt + "Z"
+          : dt;
+        return new Date(s).getTime();
+      };
+
       for (const session of sessions) {
+        const serverTime = parseUtcTime(session.started_at);
+
+        // Find if an existing local completed session has a different ID but matches this server session's timestamp
+        const matchingLocal = localSessions.find((ls) =>
+          ls.id !== session.id &&
+          ls.status === "completed" &&
+          Math.abs(parseUtcTime(ls.started_at) - serverTime) < 60000
+        );
+
+        if (matchingLocal) {
+          await this.db.delete("workout_sessions", matchingLocal.id);
+          const oldLogs = await this.db.getByIndex("exercise_logs", "workout_session_id", matchingLocal.id);
+          for (const ol of oldLogs) {
+            await this.db.delete("exercise_logs", ol.id);
+            const oldSets = await this.db.getByIndex("set_entries", "exercise_log_id", ol.id);
+            for (const os of oldSets) {
+              await this.db.delete("set_entries", os.id);
+            }
+          }
+        }
+
+        const normalizedStartedAt = (session.started_at && typeof session.started_at === "string" && !session.started_at.endsWith("Z") && !session.started_at.includes("+") && !session.started_at.includes("-", 10))
+          ? session.started_at + "Z"
+          : session.started_at;
+
+        const normalizedCompletedAt = (session.completed_at && typeof session.completed_at === "string" && !session.completed_at.endsWith("Z") && !session.completed_at.includes("+") && !session.completed_at.includes("-", 10))
+          ? session.completed_at + "Z"
+          : session.completed_at;
+
         await this.db.put("workout_sessions", {
           id: session.id,
           name: session.name,
-          started_at: session.started_at,
-          completed_at: session.completed_at,
+          started_at: normalizedStartedAt,
+          completed_at: normalizedCompletedAt,
           session_notes: session.session_notes,
           routine_id: session.routine_id,
           synced: true,

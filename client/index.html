@@ -95,6 +95,22 @@
             </button>
           </div>
 
+          <!-- Workout Volume Metrics & Category Breakdown -->
+          <div id="workout-volume-panel" class="volume-panel">
+            <div class="volume-panel-header">
+              <div class="volume-title-group">
+                <span class="volume-panel-title">TOTAL WORKOUT VOLUME</span>
+                <span id="workout-total-volume" class="volume-total-number">0 lbs</span>
+              </div>
+            </div>
+            <div class="category-breakdown-section">
+              <span class="category-section-title">Volume by Muscle Group</span>
+              <div id="workout-category-breakdown" class="category-breakdown-grid">
+                <!-- Dynamically populated muscle group category chips -->
+              </div>
+            </div>
+          </div>
+
           <!-- Exercises list in current workout -->
           <div class="section-label">Session Exercises</div>
           <div id="workout-exercises-list" class="exercises-container">
@@ -169,6 +185,12 @@
               </div>
             </div>
 
+            <!-- Exercise Level Volume Bar -->
+            <div class="exercise-volume-badge-row">
+              <span class="ex-vol-title">EXERCISE VOLUME</span>
+              <span id="exercise-total-volume" class="ex-vol-stat">0 lbs</span>
+            </div>
+
             <!-- Exercise Level Notes -->
             <div class="notes-field-group">
               <label class="notes-field-label">
@@ -183,6 +205,18 @@
 
             <!-- Stepper Form -->
             <div class="stepper-box">
+              <!-- Edit Set Banner -->
+              <div id="editing-set-banner" class="editing-set-banner hidden">
+                <div class="editing-banner-text">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  <span>Editing Set #<strong id="editing-set-number-label">1</strong></span>
+                </div>
+                <button type="button" id="btn-cancel-edit-banner" class="btn-cancel-edit-banner">Cancel</button>
+              </div>
+
               <div class="stepper-group">
                 <label class="stepper-label">WEIGHT (lbs)</label>
                 <div class="stepper-control">
@@ -217,6 +251,7 @@
 
               <div class="stepper-actions">
                 <button id="btn-save-set" class="btn btn-primary flex-1">SAVE SET</button>
+                <button id="btn-cancel-edit-set" class="btn btn-secondary flex-1 hidden">CANCEL</button>
                 <button id="btn-clear-set" class="btn btn-neutral flex-1">CLEAR</button>
               </div>
             </div>
