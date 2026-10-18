@@ -1099,6 +1099,17 @@ class WorkoutApp {
       setNotesInput.value = "";
     }
 
+    // Reset save set button state
+    const saveBtn = document.getElementById("btn-save-set");
+    if (saveBtn) {
+      if (this.saveBtnTimeout) {
+        clearTimeout(this.saveBtnTimeout);
+        this.saveBtnTimeout = null;
+      }
+      saveBtn.classList.remove("btn-saved-success");
+      saveBtn.innerHTML = "SAVE SET";
+    }
+
     // Load saved rest timer duration for this specific exercise
     try {
       const exercise = await localDB.get("exercises", log.exercise_id);
@@ -1344,7 +1355,9 @@ class WorkoutApp {
     // Button micro-interaction: green checkmark and "SAVED"
     const saveBtn = document.getElementById("btn-save-set");
     if (saveBtn) {
-      const originalHtml = saveBtn.innerHTML;
+      if (this.saveBtnTimeout) {
+        clearTimeout(this.saveBtnTimeout);
+      }
       saveBtn.classList.add("btn-saved-success");
       saveBtn.innerHTML = `
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
@@ -1352,9 +1365,10 @@ class WorkoutApp {
         </svg>
         <span>SAVED</span>
       `;
-      setTimeout(() => {
+      this.saveBtnTimeout = setTimeout(() => {
         saveBtn.classList.remove("btn-saved-success");
-        saveBtn.innerHTML = originalHtml;
+        saveBtn.innerHTML = "SAVE SET";
+        this.saveBtnTimeout = null;
       }, 1200);
     }
 
@@ -1428,37 +1442,50 @@ class WorkoutApp {
 
   // Completes active workout session and triggers sync
   async finishActiveSession() {
-    if (!this.activeSession) return;
+    if (!this.activeSession || this.isFinishingSession) return;
+    this.isFinishingSession = true;
 
-    const full = await localDB.getFullSession(this.activeSession.id);
-    const hasSets = full.exercise_logs.some((l) => l.sets && l.sets.length > 0);
+    const finishBtn = document.getElementById("btn-finish-workout");
+    if (finishBtn) finishBtn.disabled = true;
 
-    if (!hasSets) {
-      const confirmEmpty = confirm("No sets logged in this session. Finish anyway?");
-      if (!confirmEmpty) return;
+    try {
+      const full = await localDB.getFullSession(this.activeSession.id);
+      const hasSets = full && full.exercise_logs && full.exercise_logs.some((l) => l.sets && l.sets.length > 0);
+
+      if (!hasSets) {
+        const confirmEmpty = confirm("No sets logged in this session. Finish anyway?");
+        if (!confirmEmpty) {
+          if (finishBtn) finishBtn.disabled = false;
+          this.isFinishingSession = false;
+          return;
+        }
+      }
+
+      this.activeSession.status = "completed";
+      this.activeSession.completed_at = new Date().toISOString();
+      if (!this.activeSession.started_at) {
+        this.activeSession.started_at = this.activeSession.completed_at;
+      }
+      this.activeSession.synced = false;
+
+      await localDB.put("workout_sessions", this.activeSession);
+      await localDB.delete("app_meta", "active_session_id");
+
+      this.stopTimer();
+      this.resetTimerDisplay();
+      if (this.restTimer) this.restTimer.skip();
+
+      // Trigger immediate background sync to server
+      await syncManager.syncNow();
+
+      // Start a fresh workout draft
+      await this.createNewActiveSession();
+      this.switchView("view-history");
+      this.showToast("Workout saved successfully!");
+    } finally {
+      if (finishBtn) finishBtn.disabled = false;
+      this.isFinishingSession = false;
     }
-
-    this.activeSession.status = "completed";
-    this.activeSession.completed_at = new Date().toISOString();
-    if (!this.activeSession.started_at) {
-      this.activeSession.started_at = this.activeSession.completed_at;
-    }
-    this.activeSession.synced = false;
-
-    await localDB.put("workout_sessions", this.activeSession);
-    await localDB.delete("app_meta", "active_session_id");
-
-    this.stopTimer();
-    this.resetTimerDisplay();
-    if (this.restTimer) this.restTimer.skip();
-
-    // Trigger immediate background sync to server
-    await syncManager.syncNow();
-
-    // Start a fresh workout draft
-    await this.createNewActiveSession();
-    this.switchView("view-history");
-    this.showToast("Workout saved successfully!");
   }
 
   // Render Workout History (Screen 3 Mockup)
@@ -1466,20 +1493,63 @@ class WorkoutApp {
     const list = document.getElementById("history-sessions-list");
     if (!list) return;
 
+    this.historyRenderToken = (this.historyRenderToken || 0) + 1;
+    const currentToken = this.historyRenderToken;
+
     const allSessions = await localDB.getAll("workout_sessions");
+    if (currentToken !== this.historyRenderToken) return;
+
     const completed = allSessions
       .filter((s) => s.status === "completed")
       .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
 
-    list.innerHTML = "";
+    // Deduplicate sessions in memory and purge duplicates from local storage
+    const seenIds = new Set();
+    const seenTimestamps = new Map();
+    const uniqueSessions = [];
+    const duplicateIdsToDelete = [];
 
-    if (completed.length === 0) {
+    for (const s of completed) {
+      if (seenIds.has(s.id)) {
+        duplicateIdsToDelete.push(s.id);
+        continue;
+      }
+      seenIds.add(s.id);
+
+      const timeKey = s.started_at ? new Date(s.started_at).getTime() : 0;
+      let isDuplicateTime = false;
+      for (const [existingTime] of seenTimestamps.entries()) {
+        if (Math.abs(existingTime - timeKey) < 5000) {
+          isDuplicateTime = true;
+          duplicateIdsToDelete.push(s.id);
+          break;
+        }
+      }
+
+      if (!isDuplicateTime) {
+        seenTimestamps.set(timeKey, s.id);
+        uniqueSessions.push(s);
+      }
+    }
+
+    if (duplicateIdsToDelete.length > 0) {
+      for (const dupId of duplicateIdsToDelete) {
+        localDB.delete("workout_sessions", dupId).catch(console.warn);
+      }
+    }
+
+    if (uniqueSessions.length === 0) {
       list.innerHTML = `<div class="empty-state"><p>No completed workouts in history yet. Finish a workout to view records here.</p></div>`;
       return;
     }
 
-    for (const session of completed) {
+    const cards = [];
+
+    for (const session of uniqueSessions) {
       const full = await localDB.getFullSession(session.id);
+      if (currentToken !== this.historyRenderToken) return;
+      if (!full) continue;
+
       const card = document.createElement("div");
       card.className = "history-card";
       card.setAttribute("data-session-id", session.id);
@@ -1623,8 +1693,11 @@ class WorkoutApp {
         });
       }
 
-      list.appendChild(card);
+      cards.push(card);
     }
+
+    if (currentToken !== this.historyRenderToken) return;
+    list.replaceChildren(...cards);
   }
 
   // Render Exercise Catalog
