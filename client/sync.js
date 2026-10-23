@@ -161,12 +161,16 @@ class SyncManager {
 
         if (session.exercise_logs) {
           for (const log of session.exercise_logs) {
+            const resolvedMuscle = (log.target_muscle_group && log.target_muscle_group !== "Other")
+              ? log.target_muscle_group
+              : ((this.db && this.db.inferMuscleGroup) ? this.db.inferMuscleGroup(log.exercise_name) : "Other");
+
             await this.db.put("exercise_logs", {
               id: log.id,
               workout_session_id: session.id,
               exercise_id: log.exercise_id,
               exercise_name: log.exercise_name || "Exercise",
-              target_muscle_group: log.target_muscle_group || this.db.inferMuscleGroup(log.exercise_name) || "Other",
+              target_muscle_group: resolvedMuscle || "Other",
               order_index: log.order_index,
               notes: log.notes
             });

@@ -1,15 +1,21 @@
-// Rest Timer Manager with Web Audio API chime and Mobile Vibration
+// Rest Timer Manager with Web Audio chime, background keepalive audio, Wake Lock, and Notification support
 class RestTimerManager {
   constructor(app) {
     this.app = app;
     this.duration = 90;
     this.remaining = 0;
     this.interval = null;
+    this.endTime = null;
+    this.pausedRemainingMs = null;
     this.isPaused = false;
     this.isRunning = false;
     this.currentExerciseName = "";
     this.audioCtx = null;
+    this.wakeLock = null;
+    this.worker = null;
     this.initAudioUnlock();
+    this.initWorker();
+    this.initVisibilityListener();
   }
 
   initAudioUnlock() {
@@ -32,7 +38,74 @@ class RestTimerManager {
     window.addEventListener("touchstart", unlock, { passive: true });
   }
 
+  initWorker() {
+    try {
+      const code = `
+        let t = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (t) clearInterval(t);
+            t = setInterval(() => self.postMessage('tick'), 250);
+          } else if (e.data === 'stop') {
+            if (t) clearInterval(t);
+            t = null;
+          }
+        };
+      `;
+      const blob = new Blob([code], { type: "application/javascript" });
+      this.worker = new Worker(URL.createObjectURL(blob));
+      this.worker.onmessage = () => {
+        this.onTick();
+      };
+    } catch (err) {
+      this.worker = null;
+    }
+  }
+
+  initVisibilityListener() {
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (this.isRunning && !this.isPaused) {
+          this.requestWakeLock();
+          this.onTick();
+        }
+      }
+    });
+  }
+
+  async requestWakeLock() {
+    if ("wakeLock" in navigator && !this.wakeLock) {
+      try {
+        this.wakeLock = await navigator.wakeLock.request("screen");
+        this.wakeLock.addEventListener("release", () => {
+          this.wakeLock = null;
+        });
+      } catch (err) {
+        // May fail if low power mode or battery saver is active
+      }
+    }
+  }
+
+  async releaseWakeLock() {
+    if (this.wakeLock) {
+      try {
+        await this.wakeLock.release();
+      } catch (err) {}
+      this.wakeLock = null;
+    }
+  }
+
   playChime() {
+    // 1. Play HTML5 Audio element for audio chime
+    try {
+      const chimeAudio = document.getElementById("rest-chime-audio");
+      if (chimeAudio) {
+        chimeAudio.currentTime = 0;
+        chimeAudio.play().catch(() => {});
+      }
+    } catch (err) {}
+
+    // 2. Play Web Audio API synthesized chime
     try {
       const AudioClass = window.AudioContext || window.webkitAudioContext;
       if (!this.audioCtx && AudioClass) {
@@ -48,7 +121,7 @@ class RestTimerManager {
           const gain = this.audioCtx.createGain();
           osc.type = "sine";
           osc.frequency.setValueAtTime(freq, now + offset);
-          gain.gain.setValueAtTime(0.28, now + offset);
+          gain.gain.setValueAtTime(0.3, now + offset);
           gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + duration);
           osc.connect(gain);
           gain.connect(this.audioCtx.destination);
@@ -65,7 +138,7 @@ class RestTimerManager {
       console.warn("Audio playback not supported:", err);
     }
 
-    // Trigger haptic vibration on mobile
+    // 3. Trigger haptic vibration on mobile
     if ("vibrate" in navigator) {
       try {
         navigator.vibrate([250, 100, 250, 100, 450]);
@@ -73,15 +146,47 @@ class RestTimerManager {
         // Ignore vibration errors
       }
     }
+
+    // 4. Send background notification to Service Worker
+    try {
+      if ("Notification" in window && Notification.permission === "granted") {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "REST_FINISHED_NOTIFICATION",
+            title: "Rest Complete",
+            body: `Time for your next set of ${this.currentExerciseName || "Exercise"}`
+          });
+        }
+      }
+    } catch (err) {}
   }
 
   start(seconds, exerciseName = "Exercise") {
     this.stop();
     this.duration = Math.max(5, seconds);
     this.remaining = this.duration;
+    this.endTime = Date.now() + this.duration * 1000;
+    this.pausedRemainingMs = null;
     this.isPaused = false;
     this.isRunning = true;
     this.currentExerciseName = exerciseName;
+
+    // Start background audio keepalive to retain audio session on mobile screen off
+    try {
+      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
+      if (keepaliveAudio) {
+        keepaliveAudio.currentTime = 0;
+        keepaliveAudio.play().catch(() => {});
+      }
+    } catch (err) {}
+
+    // Request wake lock to prevent screen sleep while resting
+    this.requestWakeLock();
+
+    // Request notification permission if not yet decided
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
 
     const card = document.getElementById("active-rest-card");
     if (card) {
@@ -100,27 +205,55 @@ class RestTimerManager {
 
     this.updateUI();
 
+    // Start worker ticker and fallback interval
+    if (this.worker) {
+      this.worker.postMessage("start");
+    }
     this.interval = setInterval(() => {
-      if (this.isPaused) return;
+      this.onTick();
+    }, 500);
+  }
 
-      this.remaining -= 1;
-      this.updateUI();
+  onTick() {
+    if (!this.isRunning || this.isPaused || !this.endTime) return;
 
-      if (this.remaining <= 0) {
-        this.stop();
-        this.onFinish();
-      }
-    }, 1000);
+    const remainingMs = this.endTime - Date.now();
+    this.remaining = Math.max(0, Math.ceil(remainingMs / 1000));
+    this.updateUI();
+
+    if (remainingMs <= 0) {
+      this.stop();
+      this.onFinish();
+    }
   }
 
   addSeconds(secs) {
-    this.remaining = Math.max(0, this.remaining + secs);
-    this.duration = Math.max(this.duration, this.remaining);
+    this.duration = Math.max(this.duration + secs, 5);
+    if (this.isPaused) {
+      this.pausedRemainingMs = Math.max(0, (this.pausedRemainingMs || 0) + secs * 1000);
+      this.remaining = Math.ceil(this.pausedRemainingMs / 1000);
+    } else {
+      this.endTime = (this.endTime || Date.now()) + secs * 1000;
+      this.remaining = Math.max(0, Math.ceil((this.endTime - Date.now()) / 1000));
+    }
     this.updateUI();
   }
 
   togglePause() {
     this.isPaused = !this.isPaused;
+    if (this.isPaused) {
+      this.pausedRemainingMs = Math.max(0, (this.endTime || Date.now()) - Date.now());
+      this.releaseWakeLock();
+      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
+      if (keepaliveAudio) keepaliveAudio.pause();
+    } else {
+      this.endTime = Date.now() + (this.pausedRemainingMs || this.remaining * 1000);
+      this.pausedRemainingMs = null;
+      this.requestWakeLock();
+      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
+      if (keepaliveAudio) keepaliveAudio.play().catch(() => {});
+    }
+
     const pauseBtn = document.getElementById("btn-rest-pause");
     if (pauseBtn) {
       pauseBtn.textContent = this.isPaused ? "Resume" : "Pause";
@@ -149,7 +282,18 @@ class RestTimerManager {
       clearInterval(this.interval);
       this.interval = null;
     }
+    if (this.worker) {
+      this.worker.postMessage("stop");
+    }
+    this.releaseWakeLock();
+    const keepaliveAudio = document.getElementById("rest-keepalive-audio");
+    if (keepaliveAudio) {
+      keepaliveAudio.pause();
+      keepaliveAudio.currentTime = 0;
+    }
     this.isRunning = false;
+    this.endTime = null;
+    this.pausedRemainingMs = null;
   }
 
   updateUI() {
@@ -400,9 +544,15 @@ class WorkoutApp {
             changed = true;
           }
         }
+        if (ex && (!log.exercise_name || log.exercise_name === "Exercise")) {
+          log.exercise_name = ex.name;
+          changed = true;
+        }
+
+        const candidateName = log.exercise_name || (ex ? ex.name : "");
         const expectedMuscle = (ex && ex.target_muscle_group && ex.target_muscle_group !== "Other")
           ? ex.target_muscle_group
-          : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : "Other");
+          : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(candidateName) : "Other");
 
         if (expectedMuscle && expectedMuscle !== "Other" && log.target_muscle_group !== expectedMuscle) {
           log.target_muscle_group = expectedMuscle;
@@ -437,7 +587,7 @@ class WorkoutApp {
         await localDB.put("exercises", ex);
       }
     } else {
-      // Migrate existing local exercises from coarse 'Arms'/'Legs' to granular groups
+      // Migrate existing local exercises from coarse 'Arms'/'Legs' to granular groups, and infer if Other
       for (const ex of existing) {
         let updated = false;
         if (ex.name === "Dumbbell Bicep Curl" && ex.target_muscle_group === "Arms") {
@@ -453,6 +603,15 @@ class WorkoutApp {
           ex.target_muscle_group = "Hamstrings";
           updated = true;
         }
+
+        if ((!ex.target_muscle_group || ex.target_muscle_group === "Other") && localDB.inferMuscleGroup) {
+          const inferred = localDB.inferMuscleGroup(ex.name);
+          if (inferred && inferred !== "Other") {
+            ex.target_muscle_group = inferred;
+            updated = true;
+          }
+        }
+
         if (updated) {
           await localDB.put("exercises", ex);
         }
@@ -611,11 +770,23 @@ class WorkoutApp {
       }
     });
 
-    // Session name change
+    // Session name change & live typing update
     const nameInput = document.getElementById("session-name-input");
-    nameInput.addEventListener("change", async (e) => {
-      if (this.activeSession) {
-        this.activeSession.name = e.target.value.trim() || "Freeform Workout";
+    const editNameBtn = document.getElementById("btn-edit-active-session-name");
+    let sessionNameDebounce = null;
+
+    if (editNameBtn && nameInput) {
+      editNameBtn.addEventListener("click", () => {
+        nameInput.focus();
+        nameInput.select();
+      });
+    }
+
+    if (nameInput) {
+      const persistSessionName = async () => {
+        if (!this.activeSession) return;
+        const val = nameInput.value.trim();
+        this.activeSession.name = val || "Freeform Workout";
         await localDB.put("workout_sessions", {
           id: this.activeSession.id,
           name: this.activeSession.name,
@@ -626,8 +797,25 @@ class WorkoutApp {
           synced: false,
           status: this.activeSession.status
         });
-      }
-    });
+      };
+
+      nameInput.addEventListener("focus", () => {
+        if (nameInput.value === "Freeform Workout") {
+          nameInput.select();
+        }
+      });
+
+      nameInput.addEventListener("input", () => {
+        if (this.activeSession) {
+          this.activeSession.name = nameInput.value.trim() || "Freeform Workout";
+        }
+        clearTimeout(sessionNameDebounce);
+        sessionNameDebounce = setTimeout(persistSessionName, 300);
+      });
+
+      nameInput.addEventListener("change", persistSessionName);
+      nameInput.addEventListener("blur", persistSessionName);
+    }
 
     // Session Notes Input & Auto-Save (Feature 5)
     const sessionNotesInput = document.getElementById("session-notes-input");
@@ -1025,6 +1213,33 @@ class WorkoutApp {
       });
     }
 
+    // Rename Workout Modal Close & Submit
+    const closeRenameModalBtn = document.getElementById("btn-close-rename-workout-modal");
+    if (closeRenameModalBtn) {
+      closeRenameModalBtn.addEventListener("click", () => {
+        document.getElementById("modal-rename-workout").classList.add("hidden");
+      });
+    }
+
+    const cancelRenameModalBtn = document.getElementById("btn-cancel-rename-workout");
+    if (cancelRenameModalBtn) {
+      cancelRenameModalBtn.addEventListener("click", () => {
+        document.getElementById("modal-rename-workout").classList.add("hidden");
+      });
+    }
+
+    const renameForm = document.getElementById("form-rename-workout");
+    if (renameForm) {
+      renameForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const sessionId = document.getElementById("rename-session-id").value;
+        const newName = document.getElementById("rename-session-name-input").value.trim();
+        if (!sessionId || !newName) return;
+        await this.saveWorkoutName(sessionId, newName);
+        document.getElementById("modal-rename-workout").classList.add("hidden");
+      });
+    }
+
     // Run Insights Button in AI Insights tab
     const runInsightsBtn = document.getElementById("btn-run-insights");
     if (runInsightsBtn) {
@@ -1135,7 +1350,11 @@ class WorkoutApp {
     container.innerHTML = "";
 
     const nameInput = document.getElementById("session-name-input");
-    if (nameInput) nameInput.value = fullSession.name || "Freeform Workout";
+    if (nameInput && document.activeElement !== nameInput) {
+      const smartSuggestion = this.generateSmartWorkoutName(fullSession.exercise_logs);
+      nameInput.placeholder = smartSuggestion || "Workout Name (e.g. Push Day, Leg Day)";
+      nameInput.value = fullSession.name || "Freeform Workout";
+    }
 
     const notesInput = document.getElementById("session-notes-input");
     if (notesInput) notesInput.value = fullSession.session_notes || "";
@@ -1817,6 +2036,70 @@ class WorkoutApp {
     }
   }
 
+  // Generates intelligent workout name from exercises and muscle groups
+  generateSmartWorkoutName(exerciseLogs) {
+    if (!exerciseLogs || exerciseLogs.length === 0) return "Workout";
+
+    const muscleGroups = new Set();
+    for (const log of exerciseLogs) {
+      let mg = (log.target_muscle_group && log.target_muscle_group !== "Other")
+        ? log.target_muscle_group
+        : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : null);
+      if (mg && mg !== "Other") {
+        muscleGroups.add(mg);
+      }
+    }
+
+    const groups = Array.from(muscleGroups);
+    if (groups.length === 0) return "Strength Workout";
+
+    const hasChest = groups.includes("Chest");
+    const hasTriceps = groups.includes("Triceps");
+    const hasShoulders = groups.includes("Shoulders");
+    const hasBack = groups.includes("Back");
+    const hasBiceps = groups.includes("Biceps");
+    const hasQuads = groups.includes("Quads");
+    const hasHamstrings = groups.includes("Hamstrings");
+    const hasGlutes = groups.includes("Glutes");
+    const hasCalves = groups.includes("Calves");
+    const hasLegs = hasQuads || hasHamstrings || hasGlutes || hasCalves || groups.includes("Legs");
+
+    // Push Day: Chest + Shoulders/Triceps (no back, no legs)
+    if (hasChest && (hasShoulders || hasTriceps) && !hasBack && !hasLegs) {
+      if (hasShoulders && hasTriceps) return "Push Day";
+      if (hasTriceps) return "Chest & Triceps Workout";
+      return "Chest & Shoulders Workout";
+    }
+
+    // Pull Day: Back + Biceps (no chest, no legs)
+    if (hasBack && hasBiceps && !hasChest && !hasLegs) {
+      return "Pull Day (Back & Biceps)";
+    }
+
+    // Leg Day
+    if (hasLegs && !hasChest && !hasBack) {
+      return "Leg Day";
+    }
+
+    // Upper Body
+    if ((hasChest || hasShoulders) && hasBack && !hasLegs) {
+      return "Upper Body Workout";
+    }
+
+    // Single muscle group
+    if (groups.length === 1) {
+      return `${groups[0]} Workout`;
+    }
+
+    // Two muscle groups
+    if (groups.length === 2) {
+      return `${groups[0]} & ${groups[1]} Workout`;
+    }
+
+    // 3 or more varied groups
+    return "Full Body Workout";
+  }
+
   // Completes active workout session and triggers sync
   async finishActiveSession() {
     if (!this.activeSession || this.isFinishingSession) return;
@@ -1836,6 +2119,27 @@ class WorkoutApp {
           this.isFinishingSession = false;
           return;
         }
+      }
+
+      // Determine final workout name and prompt if still default Freeform Workout
+      const nameInput = document.getElementById("session-name-input");
+      let currentVal = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (this.activeSession.name || "");
+      const isDefaultFreeform = !currentVal || currentVal.toLowerCase() === "freeform workout";
+
+      if (isDefaultFreeform) {
+        const smartName = this.generateSmartWorkoutName(full ? full.exercise_logs : []);
+        const userEntered = prompt("Name your workout:", smartName);
+        if (userEntered === null) {
+          // User clicked Cancel: abort finish so user can continue editing
+          if (finishBtn) finishBtn.disabled = false;
+          this.isFinishingSession = false;
+          return;
+        }
+        const finalName = userEntered.trim() || smartName || "Workout";
+        this.activeSession.name = finalName;
+        if (nameInput) nameInput.value = finalName;
+      } else {
+        this.activeSession.name = currentVal;
       }
 
       this.activeSession.status = "completed";
@@ -1872,6 +2176,9 @@ class WorkoutApp {
 
     this.historyRenderToken = (this.historyRenderToken || 0) + 1;
     const currentToken = this.historyRenderToken;
+
+    await this.backfillLogMuscleGroups();
+    if (currentToken !== this.historyRenderToken) return;
 
     const allSessions = await localDB.getAll("workout_sessions");
     if (currentToken !== this.historyRenderToken) return;
@@ -1988,12 +2295,12 @@ class WorkoutApp {
             <span class="category-section-title">Volume by Muscle Group</span>
             <div class="category-breakdown-grid">
               ${historyMuscleVols.length > 0
-                ? historyMuscleVols.map((m) => `
+          ? historyMuscleVols.map((m) => `
                   <div class="category-chip">
                     <span class="category-chip-name">${this.escapeHtml(m.muscle_group)}</span>
                     <span class="category-chip-vol">${Math.round(m.volume_lbs).toLocaleString()} lbs</span>
                   </div>`).join("")
-                : `<span class="category-empty-text">No volume recorded</span>`}
+          : `<span class="category-empty-text">No volume recorded</span>`}
             </div>
           </div>
         </div>
@@ -2001,29 +2308,29 @@ class WorkoutApp {
 
       const exerciseBreakdownHtml = (full.exercise_logs && full.exercise_logs.length > 0)
         ? full.exercise_logs.map((log) => {
-            const exNotesHtml = log.notes
-              ? `<div class="history-exercise-notes">
+          const exNotesHtml = log.notes
+            ? `<div class="history-exercise-notes">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
                   <span>${this.escapeHtml(log.notes)}</span>
                 </div>`
-              : "";
+            : "";
 
-            const setsHtml = (log.sets && log.sets.length > 0)
-              ? log.sets.map((set) => {
-                  const rirText = set.rir !== null && set.rir !== undefined ? `<span class="history-set-rir">${set.rir} RIR</span>` : "";
-                  const setNoteHtml = set.notes
-                    ? `<div class="history-set-note">
+          const setsHtml = (log.sets && log.sets.length > 0)
+            ? log.sets.map((set) => {
+              const rirText = set.rir !== null && set.rir !== undefined ? `<span class="history-set-rir">${set.rir} RIR</span>` : "";
+              const setNoteHtml = set.notes
+                ? `<div class="history-set-note">
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
                         <span>${this.escapeHtml(set.notes)}</span>
                       </div>`
-                    : "";
+                : "";
 
-                  return `
+              return `
                     <div class="history-set-item">
                       <div class="history-set-main">
                         <span class="history-set-num">Set ${set.set_number}</span>
@@ -2033,10 +2340,10 @@ class WorkoutApp {
                       ${setNoteHtml}
                     </div>
                   `;
-                }).join("")
-              : `<div class="empty-state" style="padding: 10px 0;"><p>No sets logged</p></div>`;
+            }).join("")
+            : `<div class="empty-state" style="padding: 10px 0;"><p>No sets logged</p></div>`;
 
-            return `
+          return `
               <div class="history-exercise-section">
                 <div class="history-exercise-header">
                   <div class="history-exercise-title-row">
@@ -2051,13 +2358,21 @@ class WorkoutApp {
                 </div>
               </div>
             `;
-          }).join("")
+        }).join("")
         : `<div class="empty-state"><p>No exercises recorded for this session.</p></div>`;
 
       card.innerHTML = `
         <div class="history-card-header">
           <div class="history-card-header-left">
-            <h3>${dateDisplay}: ${this.escapeHtml(session.name || "Workout")}</h3>
+            <div class="history-title-row">
+              <h3>${dateDisplay}: <span class="history-workout-name-text">${this.escapeHtml(session.name || "Workout")}</span></h3>
+              <button type="button" class="history-rename-btn icon-btn-inline" data-session-id="${session.id}" data-session-name="${this.escapeHtml(session.name || "Workout")}" title="Rename Workout" aria-label="Rename Workout">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+              </button>
+            </div>
             <span class="history-date">${summaryMeta}</span>
           </div>
           <div class="history-card-header-right">
@@ -2087,6 +2402,13 @@ class WorkoutApp {
           </div>
           ${exerciseBreakdownHtml}
           <div class="history-actions-bar">
+            <button type="button" class="btn btn-secondary btn-sm history-rename-btn" data-session-id="${session.id}" data-session-name="${this.escapeHtml(session.name || "Workout")}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+              Rename
+            </button>
             <button class="btn btn-primary btn-sm history-ai-insights-btn" data-session-id="${session.id}">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="margin-right: 4px;">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -2100,8 +2422,18 @@ class WorkoutApp {
       `;
 
       card.addEventListener("click", (e) => {
-        if (e.target.closest(".history-delete-btn") || e.target.closest(".history-notes-edit-btn") || e.target.closest(".history-ai-insights-btn")) return;
+        if (e.target.closest(".history-delete-btn") || e.target.closest(".history-notes-edit-btn") || e.target.closest(".history-ai-insights-btn") || e.target.closest(".history-rename-btn")) return;
         card.classList.toggle("expanded");
+      });
+
+      const renameBtns = card.querySelectorAll(".history-rename-btn");
+      renameBtns.forEach((rBtn) => {
+        rBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const sid = rBtn.getAttribute("data-session-id");
+          const sname = rBtn.getAttribute("data-session-name") || session.name || "Freeform Workout";
+          this.openRenameWorkoutModal(sid, sname);
+        });
       });
 
       const editNotesBtn = card.querySelector(".history-notes-edit-btn");
@@ -2305,7 +2637,9 @@ class WorkoutApp {
       order_index: nextOrder,
       notes: null,
       exercise_name: exercise.name,
-      target_muscle_group: exercise.target_muscle_group || (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(exercise.name) : "Other")
+      target_muscle_group: (exercise.target_muscle_group && exercise.target_muscle_group !== "Other")
+        ? exercise.target_muscle_group
+        : (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(exercise.name) : "Other")
     };
 
     await localDB.put("exercise_logs", newLog);
@@ -2390,24 +2724,33 @@ class WorkoutApp {
         ? log.target_muscle_group
         : null;
 
+      let match = null;
       if (!mg && exerciseCatalog && exerciseCatalog.length > 0) {
-        const match = exerciseCatalog.find((e) =>
-          (log.exercise_id && (e.id === log.exercise_id || String(e.id).replace(/-/g, "").toLowerCase() === String(log.exercise_id).replace(/-/g, "").toLowerCase())) ||
-          (log.exercise_name && e.name && e.name.trim().toLowerCase() === log.exercise_name.trim().toLowerCase())
+        match = exerciseCatalog.find((e) =>
+          (log.exercise_id && (
+            e.id === log.exercise_id ||
+            String(e.id).replace(/-/g, "").toLowerCase() === String(log.exercise_id).replace(/-/g, "").toLowerCase()
+          )) ||
+          (log.exercise_name && e.name && (
+            e.name.trim().toLowerCase() === log.exercise_name.trim().toLowerCase() ||
+            log.exercise_name.toLowerCase().includes(e.name.toLowerCase()) ||
+            e.name.toLowerCase().includes(log.exercise_name.toLowerCase())
+          ))
         );
         if (match && match.target_muscle_group && match.target_muscle_group !== "Other") {
           mg = match.target_muscle_group;
         }
       }
 
-      if (!mg) {
-        mg = localDB.inferMuscleGroup ? localDB.inferMuscleGroup(log.exercise_name) : "Other";
+      if (!mg || mg === "Other") {
+        const candidateName = log.exercise_name || (match ? match.name : "");
+        mg = (localDB.inferMuscleGroup ? localDB.inferMuscleGroup(candidateName) : "Other") || "Other";
       }
 
-      if (!mg) mg = "Other";
-
       (log.sets || []).forEach((s) => {
-        const v = (s.weight || 0) * (s.reps || 0);
+        const weight = Number(s.weight) || 0;
+        const reps = Number(s.reps) || 0;
+        const v = weight * reps;
         totalVolume += v;
         map[mg] = (map[mg] || 0) + v;
       });
@@ -2429,6 +2772,70 @@ class WorkoutApp {
         (l.sets || []).map((s) => [s.weight, s.reps, s.rir, s.notes || ""])
       ])
     });
+  }
+
+  // Open modal to rename a workout
+  openRenameWorkoutModal(sessionId, currentName = "") {
+    const modal = document.getElementById("modal-rename-workout");
+    const idInput = document.getElementById("rename-session-id");
+    const nameInput = document.getElementById("rename-session-name-input");
+    if (!modal || !idInput || !nameInput) return;
+
+    idInput.value = sessionId;
+    nameInput.value = currentName === "Freeform Workout" ? "" : currentName;
+    nameInput.placeholder = currentName || "Workout Name";
+    modal.classList.remove("hidden");
+    history.pushState({ isModal: true }, "");
+    setTimeout(() => {
+      nameInput.focus();
+      nameInput.select();
+    }, 50);
+  }
+
+  // Save workout name for any session (active or past)
+  async saveWorkoutName(sessionId, newName) {
+    const trimmed = (newName || "").trim() || "Freeform Workout";
+    const session = await localDB.get("workout_sessions", sessionId);
+    if (!session) return;
+    session.name = trimmed;
+    session.synced = false;
+    delete session.ai_insights; // Invalidate cached insights
+    await localDB.put("workout_sessions", session);
+
+    if (this.activeSession && this.activeSession.id === sessionId) {
+      this.activeSession.name = trimmed;
+      const nameInput = document.getElementById("session-name-input");
+      if (nameInput) nameInput.value = trimmed;
+    }
+
+    this.showToast("Workout renamed successfully");
+
+    // Attempt direct PATCH if online
+    if (navigator.onLine) {
+      try {
+        const patchRes = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed })
+        });
+        if (patchRes.ok) {
+          session.synced = true;
+          await localDB.put("workout_sessions", session);
+        }
+      } catch (err) {
+        console.warn("Direct PATCH session name notice:", err);
+      }
+    }
+
+    await syncManager.syncNow();
+
+    if (this.currentView === "view-history") {
+      await this.renderHistory();
+    } else if (this.currentView === "view-insights") {
+      await this.renderInsightsView();
+    } else if (this.currentView === "view-workout") {
+      await this.renderWorkoutOverview();
+    }
   }
 
   // Open modal to add or edit workout notes on a session
@@ -2527,7 +2934,7 @@ class WorkoutApp {
     for (const w of availableWorkouts) {
       const isSelected = w.id === this.selectedInsightsSessionId;
       const isActiveDraft = w.status === "in_progress" || (this.activeSession && this.activeSession.id === w.id);
-      
+
       const full = await localDB.getFullSession(w.id);
       let vol = 0;
       if (full && full.exercise_logs) {
@@ -2588,10 +2995,10 @@ class WorkoutApp {
     const isActiveDraft = fullSession.status === "in_progress" || (this.activeSession && this.activeSession.id === fullSession.id);
     const dateDisplay = fullSession.started_at
       ? new Date(fullSession.started_at).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric"
-        })
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+      })
       : "Active Today";
 
     const totalSets = (fullSession.exercise_logs || []).reduce((acc, l) => acc + (l.sets ? l.sets.length : 0), 0);
@@ -2903,8 +3310,8 @@ class WorkoutApp {
 
     const muscleBarsHtml = muscleVols.length > 0
       ? muscleVols.map((m) => {
-          const pct = Math.max(8, Math.round((m.volume_lbs / maxMuscleVol) * 100));
-          return `
+        const pct = Math.max(8, Math.round((m.volume_lbs / maxMuscleVol) * 100));
+        return `
             <div class="muscle-bar-item">
               <div class="muscle-bar-header">
                 <span class="muscle-bar-name">${this.escapeHtml(m.muscle_group)}</span>
@@ -2915,18 +3322,18 @@ class WorkoutApp {
               </div>
             </div>
           `;
-        }).join("")
+      }).join("")
       : `<p class="category-empty-text">No muscle group volume calculated.</p>`;
 
     // 3. Progressive Overload & Weight Suggestions
     const progressionHtml = (insights.progression_suggestions && insights.progression_suggestions.length > 0)
       ? insights.progression_suggestions.map((s) => {
-          const targetWeightStr = s.suggested_weight !== null && s.suggested_weight !== undefined
-            ? `${s.suggested_weight.toFixed(1)} lbs`
-            : "Maintain Load";
-          const setsRepsStr = s.suggested_reps ? ` &times; ${s.suggested_reps} reps` : "";
+        const targetWeightStr = s.suggested_weight !== null && s.suggested_weight !== undefined
+          ? `${s.suggested_weight.toFixed(1)} lbs`
+          : "Maintain Load";
+        const setsRepsStr = s.suggested_reps ? ` &times; ${s.suggested_reps} reps` : "";
 
-          return `
+        return `
             <div class="progression-item-card">
               <div class="progression-item-top">
                 <span class="progression-exercise-title">${this.escapeHtml(s.exercise_name)}</span>
@@ -2936,7 +3343,7 @@ class WorkoutApp {
               <p class="progression-rec-text">${this.escapeHtml(s.recommendation)}</p>
             </div>
           `;
-        }).join("")
+      }).join("")
       : `<p class="category-empty-text">No specific progression targets calculated.</p>`;
 
     // 4. Form Cues & Maintenance Tips

@@ -1,3 +1,1 @@
-the volume breakdown by muscle group doesn't work in the history tab. It just lists them all under other.
-
-There is no space between Finish & Save Session button and Ai insights for this workout button in the workout tab
+I want to name workouts. RIght now they are getting saved as Freeform workout. Also want the ability to rename a workout from the history tab. 

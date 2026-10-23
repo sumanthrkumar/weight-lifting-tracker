@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -12,15 +13,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
   <div class="device-frame">
     <div id="app">
-      
+
       <!-- Top Global Status Bar -->
       <header class="app-header">
         <div class="header-left">
           <button id="btn-back" class="icon-btn hidden" aria-label="Back">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
               <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
           </button>
@@ -29,17 +32,19 @@
             <span id="page-subtitle" class="page-subtitle hidden"></span>
           </div>
         </div>
-        
+
         <div class="header-right">
           <div id="global-rest-pill" class="rest-pill-header hidden" title="Rest Timer Active">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
             <span id="global-rest-time">00:00</span>
           </div>
           <div id="timer-badge" class="timer-badge hidden">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="10"></circle>
               <polyline points="12 6 12 12 16 14"></polyline>
             </svg>
@@ -52,7 +57,8 @@
       <div id="toast-notification" class="toast-notification" aria-live="polite">
         <div class="toast-content">
           <span class="toast-icon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"
+              stroke-linecap="round" stroke-linejoin="round">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
           </span>
@@ -62,7 +68,7 @@
 
       <!-- Main Scrollable Content Area -->
       <main class="main-content">
-        
+
         <!-- ============================================== -->
         <!-- VIEW 1: WORKOUT OVERVIEW (ACTIVE SESSION)      -->
         <!-- ============================================== -->
@@ -70,10 +76,20 @@
           <!-- Active Session Card -->
           <div class="session-card">
             <div class="session-card-header">
-              <input type="text" id="session-name-input" class="session-title-input" value="Freeform Workout" placeholder="Workout Name">
+              <div class="session-title-row">
+                <input type="text" id="session-name-input" class="session-title-input" value="Freeform Workout"
+                  placeholder="Workout Name (e.g. Push Day, Chest &amp; Back)">
+                <button type="button" id="btn-edit-active-session-name" class="session-title-edit-btn" title="Edit Workout Name" aria-label="Edit Workout Name">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                </button>
+              </div>
               <div class="session-meta">
                 <span class="session-timer-large">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
@@ -85,12 +101,13 @@
                 </span>
               </div>
             </div>
-            
+
             <!-- Workout Notes & Plan (Feature 5) -->
             <div class="session-notes-box">
               <div class="session-notes-header">
                 <label for="session-notes-input" class="session-notes-label">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
@@ -98,11 +115,13 @@
                 </label>
                 <span id="session-notes-status" class="notes-status-badge">Auto-saved</span>
               </div>
-              <textarea id="session-notes-input" class="session-notes-textarea" placeholder="Add workout goals, planned weights, fatigue, or session notes..." rows="2"></textarea>
+              <textarea id="session-notes-input" class="session-notes-textarea"
+                placeholder="Add workout goals, planned weights, fatigue, or session notes..." rows="2"></textarea>
             </div>
 
             <button id="btn-add-exercise" class="btn btn-primary btn-block">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
                 <line x1="12" y1="5" x2="12" y2="19"></line>
                 <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
@@ -141,7 +160,8 @@
               Finish &amp; Save Session
             </button>
             <button id="btn-preview-workout-ai" class="btn btn-neutral btn-block mt-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+                stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M12 16v-4"></path>
                 <path d="M12 8h.01"></path>
@@ -170,7 +190,8 @@
                   <span class="rest-pulse-indicator"></span>
                   <span id="rest-card-title" class="rest-card-title">Resting</span>
                 </div>
-                <button type="button" id="btn-rest-skip" class="btn-rest-action btn-rest-skip" title="Skip rest">Skip</button>
+                <button type="button" id="btn-rest-skip" class="btn-rest-action btn-rest-skip"
+                  title="Skip rest">Skip</button>
               </div>
               <div class="rest-card-body">
                 <div id="rest-countdown-display" class="rest-countdown-digits">00:00</div>
@@ -188,13 +209,15 @@
             <div class="rest-setting-panel">
               <div class="rest-setting-header">
                 <div class="rest-setting-title">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
                   <span>Rest Target: <strong id="rest-target-label">90s</strong></span>
                 </div>
-                <button type="button" id="btn-start-rest-manual" class="btn-manual-rest" title="Start rest timer">Start Rest</button>
+                <button type="button" id="btn-start-rest-manual" class="btn-manual-rest" title="Start rest timer">Start
+                  Rest</button>
               </div>
               <div class="rest-presets-row">
                 <button type="button" class="btn-rest-preset" data-seconds="60">60s</button>
@@ -202,8 +225,10 @@
                 <button type="button" class="btn-rest-preset" data-seconds="120">2m</button>
                 <button type="button" class="btn-rest-preset" data-seconds="180">3m</button>
                 <div class="rest-adjust-steppers">
-                  <button type="button" id="btn-rest-adjust-minus" class="rest-stepper-btn" aria-label="Decrease 15s">&minus;15s</button>
-                  <button type="button" id="btn-rest-adjust-plus" class="rest-stepper-btn" aria-label="Increase 15s">&plus;15s</button>
+                  <button type="button" id="btn-rest-adjust-minus" class="rest-stepper-btn"
+                    aria-label="Decrease 15s">&minus;15s</button>
+                  <button type="button" id="btn-rest-adjust-plus" class="rest-stepper-btn"
+                    aria-label="Increase 15s">&plus;15s</button>
                 </div>
               </div>
             </div>
@@ -217,13 +242,15 @@
             <!-- Exercise Level Notes -->
             <div class="notes-field-group">
               <label class="notes-field-label">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                 </svg>
                 <span>Exercise Notes</span>
               </label>
-              <input type="text" id="input-exercise-notes" class="notes-input" placeholder="e.g. seat height 4, wide grip, 3s pause...">
+              <input type="text" id="input-exercise-notes" class="notes-input"
+                placeholder="e.g. seat height 4, wide grip, 3s pause...">
             </div>
 
             <!-- Stepper Form -->
@@ -231,7 +258,8 @@
               <!-- Edit Set Banner -->
               <div id="editing-set-banner" class="editing-set-banner hidden">
                 <div class="editing-banner-text">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                   </svg>
@@ -269,7 +297,8 @@
 
               <div class="stepper-group">
                 <label class="stepper-label">SET NOTES (Optional)</label>
-                <input type="text" id="input-set-notes" class="notes-input" placeholder="e.g. explosive concentric, felt smooth...">
+                <input type="text" id="input-set-notes" class="notes-input"
+                  placeholder="e.g. explosive concentric, felt smooth...">
               </div>
 
               <div class="stepper-actions">
@@ -288,7 +317,8 @@
             <!-- AI Coach Card -->
             <div class="ai-coach-card">
               <div class="ai-coach-header">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
                   <rect x="3" y="11" width="18" height="10" rx="2"></rect>
                   <circle cx="12" cy="5" r="2"></circle>
                   <path d="M12 7v4"></path>
@@ -298,7 +328,8 @@
                 <span>AI Coach Live Feedback</span>
               </div>
               <p id="ai-coach-text" class="ai-coach-body">
-                Estimated fatigue: Low. Ready for Set 4? Suggest targeting 140 lbs &times; 5 to keep progressive overload.
+                Estimated fatigue: Low. Ready for Set 4? Suggest targeting 140 lbs &times; 5 to keep progressive
+                overload.
               </p>
             </div>
           </div>
@@ -324,7 +355,8 @@
           <div class="history-header">
             <span class="section-label">Past Workouts</span>
             <button id="btn-sync-manual" class="icon-btn-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
               </svg>
@@ -370,7 +402,8 @@
         <section id="view-insights" class="view-panel">
           <div class="insights-view-header">
             <div class="section-label">AI Workout Coach &amp; Progression</div>
-            <p class="insights-view-subtitle">Select or tap any workout to analyze muscle volume, targets, form cues, and notes.</p>
+            <p class="insights-view-subtitle">Select or tap any workout to analyze muscle volume, targets, form cues,
+              and notes.</p>
           </div>
 
           <!-- Workout Carousel / Selector Chips -->
@@ -391,7 +424,8 @@
               <span id="insights-selected-meta">Date • 0 sets</span>
             </div>
             <button id="btn-run-insights" class="btn btn-primary btn-sm">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
               </svg>
               <span>Analyze Workout</span>
@@ -402,11 +436,14 @@
           <div id="insights-results-container" class="insights-results-container">
             <!-- Dynamically populated or empty state -->
             <div id="insights-empty-state" class="empty-state">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--accent-tan); opacity: 0.8; margin-bottom: 8px;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round"
+                style="color: var(--accent-tan); opacity: 0.8; margin-bottom: 8px;">
                 <circle cx="12" cy="12" r="10"></circle>
                 <path d="M12 6v6l4 2"></path>
               </svg>
-              <p>Select a workout above to view intelligent volume breakdown, progression targets, form cues, and notes analysis.</p>
+              <p>Select a workout above to view intelligent volume breakdown, progression targets, form cues, and notes
+                analysis.</p>
             </div>
           </div>
 
@@ -425,14 +462,16 @@
       <!-- Bottom Fixed Navigation Bar -->
       <nav class="bottom-nav">
         <button id="tab-nav-workout" class="nav-item active" data-view="view-workout">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M6 5v14M18 5v14M2 9h4M18 9h4M2 15h4M18 15h4M6 12h12"></path>
           </svg>
           <span>Workout</span>
         </button>
 
         <button id="tab-nav-history" class="nav-item" data-view="view-history">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="10"></circle>
             <polyline points="12 6 12 12 16 14"></polyline>
           </svg>
@@ -440,7 +479,8 @@
         </button>
 
         <button id="tab-nav-exercises" class="nav-item" data-view="view-exercises">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <line x1="8" y1="6" x2="21" y2="6"></line>
             <line x1="8" y1="12" x2="21" y2="12"></line>
             <line x1="8" y1="18" x2="21" y2="18"></line>
@@ -452,10 +492,13 @@
         </button>
 
         <button id="tab-nav-insights" class="nav-item" data-view="view-insights">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <line x1="9" y1="18" x2="15" y2="18"></line>
             <line x1="10" y1="22" x2="14" y2="22"></line>
-            <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"></path>
+            <path
+              d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14">
+            </path>
           </svg>
           <span>AI Insights</span>
         </button>
@@ -487,7 +530,7 @@
         <form id="form-create-exercise" class="modal-form">
           <label>Exercise Name</label>
           <input type="text" id="create-ex-name" class="form-input" required placeholder="e.g. Romanian Deadlift">
-          
+
           <label>Target Muscle Group</label>
           <select id="create-ex-muscle" class="form-input" required>
             <option value="Chest">Chest</option>
@@ -529,7 +572,7 @@
           <input type="hidden" id="edit-ex-id">
           <label>Exercise Name</label>
           <input type="text" id="edit-ex-name" class="form-input" required placeholder="e.g. Romanian Deadlift">
-          
+
           <label>Target Muscle Group</label>
           <select id="edit-ex-muscle" class="form-input" required>
             <option value="Chest">Chest</option>
@@ -557,7 +600,8 @@
           </select>
 
           <div style="display: flex; gap: 10px; margin-top: 16px;">
-            <button type="button" id="btn-delete-exercise" class="btn btn-danger" style="flex: 1; background: #dc2626; color: #fff; padding: 12px; border-radius: 8px; border: none; font-weight: 600;">Delete</button>
+            <button type="button" id="btn-delete-exercise" class="btn btn-danger"
+              style="flex: 1; background: #dc2626; color: #fff; padding: 12px; border-radius: 8px; border: none; font-weight: 600;">Delete</button>
             <button type="submit" class="btn btn-primary" style="flex: 2;">Save Changes</button>
           </div>
         </form>
@@ -574,13 +618,37 @@
         <form id="form-edit-workout-notes" class="modal-form">
           <input type="hidden" id="edit-session-notes-id">
           <label id="edit-session-notes-title-label" for="edit-session-notes-text">Session Notes &amp; Plan</label>
-          <textarea id="edit-session-notes-text" class="form-input" rows="4" placeholder="Add or update session notes, goals, or reflections..."></textarea>
+          <textarea id="edit-session-notes-text" class="form-input" rows="4"
+            placeholder="Add or update session notes, goals, or reflections..."></textarea>
           <button type="submit" class="btn btn-primary btn-block mt-4">Save Notes</button>
         </form>
       </div>
     </div>
 
+    <!-- Modal: Rename Workout -->
+    <div id="modal-rename-workout" class="modal-overlay hidden">
+      <div class="modal-sheet">
+        <div class="modal-header">
+          <h2>Rename Workout</h2>
+          <button type="button" id="btn-close-rename-workout-modal" class="icon-btn">&times;</button>
+        </div>
+        <form id="form-rename-workout" class="modal-form">
+          <input type="hidden" id="rename-session-id">
+          <label for="rename-session-name-input">Workout Name</label>
+          <input type="text" id="rename-session-name-input" class="form-input" required placeholder="e.g. Chest &amp; Triceps, Leg Day...">
+          <div style="display: flex; gap: 10px; margin-top: 16px;">
+            <button type="button" id="btn-cancel-rename-workout" class="btn btn-neutral" style="flex: 1;">Cancel</button>
+            <button type="submit" class="btn btn-primary" style="flex: 2;">Save Name</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
   </div>
+
+  <!-- Background Rest Timer Audio Assets -->
+  <audio id="rest-keepalive-audio" src="./silence.wav" preload="auto" loop></audio>
+  <audio id="rest-chime-audio" src="./chime.wav" preload="auto"></audio>
 
   <script src="db.js"></script>
   <script src="sync.js"></script>
@@ -595,4 +663,5 @@
     }
   </script>
 </body>
+
 </html>

@@ -91,6 +91,10 @@ class WorkoutSessionResponse(WorkoutSessionBase):
 class SyncPayload(BaseModel):
     sessions: list[WorkoutSessionSync] = []
 
+class WorkoutSessionUpdate(BaseModel):
+    name: str | None = None
+    session_notes: str | None = None
+
 
 # DTO for LLM 
 

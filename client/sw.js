@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v13";
+const CACHE_NAME = "workout-tracker-v16";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -6,6 +6,8 @@ const ASSETS_TO_CACHE = [
   "./app.js",
   "./db.js",
   "./sync.js",
+  "./silence.wav",
+  "./chime.wav",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
@@ -66,5 +68,33 @@ self.addEventListener("fetch", (event) => {
           }
         });
       })
+  );
+});
+
+// Handle background notification triggers from RestTimerManager
+self.addEventListener("message", (event) => {
+  if (event.data && event.data.type === "REST_FINISHED_NOTIFICATION") {
+    const title = event.data.title || "Rest Finished";
+    const body = event.data.body || "Time for your next set";
+    self.registration.showNotification(title, {
+      body: body,
+      icon: "./icon-192.png",
+      badge: "./icon-192.png",
+      vibrate: [300, 150, 300, 150, 500],
+      tag: "rest-timer-finished",
+      renotify: true
+    });
+  }
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow("./");
+    })
   );
 });

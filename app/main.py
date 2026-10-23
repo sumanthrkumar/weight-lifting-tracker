@@ -254,6 +254,33 @@ def delete_session(session_id: uuid.UUID, db: Session = Depends(get_db)):
     db.delete(db_session)
     db.commit()
 
+# PATCH /sessions/{session_id} - Update session name or notes
+@app.patch("/sessions/{session_id}", response_model=schemas.WorkoutSessionResponse)
+def update_session(session_id: uuid.UUID, session_in: schemas.WorkoutSessionUpdate, db: Session = Depends(get_db)):
+    stmt = (
+        select(models.WorkoutSession)
+        .options(
+            selectinload(models.WorkoutSession.exercise_logs)
+            .selectinload(models.ExerciseLog.sets),
+            selectinload(models.WorkoutSession.exercise_logs)
+            .selectinload(models.ExerciseLog.exercise)
+        )
+        .where(models.WorkoutSession.id == session_id)
+    )
+    db_session = db.scalars(stmt).first()
+    if not db_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workout session not found"
+        )
+    if session_in.name is not None:
+        db_session.name = session_in.name
+    if session_in.session_notes is not None:
+        db_session.session_notes = session_in.session_notes
+    db.commit()
+    db.refresh(db_session)
+    return db_session
+
 @app.post("/coach/exercise", response_model=schemas.CoachExerciseFeedbackResponse)
 def coach_exercise_feedback(payload: schemas.CoachExerciseFeedbackRequest):
     print(f"[COACH REQ] {payload.exercise_name} ({payload.target_muscle_group}) sets={len(payload.completed_sets)}", flush=True)

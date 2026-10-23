@@ -141,17 +141,30 @@ class LocalDatabase {
                    exerciseMap.get(String(log.exercise_id).replace(/-/g, "").toLowerCase());
       }
       if (!exercise && log.exercise_name) {
-        exercise = nameMap.get(log.exercise_name.trim().toLowerCase());
+        const norm = log.exercise_name.trim().toLowerCase();
+        exercise = nameMap.get(norm);
+        if (!exercise) {
+          for (const [name, ex] of nameMap.entries()) {
+            if (norm.includes(name) || name.includes(norm)) {
+              exercise = ex;
+              break;
+            }
+          }
+        }
       }
 
-      log.exercise_name = exercise ? exercise.name : (log.exercise_name || "Exercise");
+      if (exercise && (!log.exercise_name || log.exercise_name === "Exercise")) {
+        log.exercise_name = exercise.name;
+      } else {
+        log.exercise_name = log.exercise_name || (exercise ? exercise.name : "Exercise");
+      }
 
       let muscle = (exercise && exercise.target_muscle_group && exercise.target_muscle_group !== "Other")
         ? exercise.target_muscle_group
         : (log.target_muscle_group && log.target_muscle_group !== "Other" ? log.target_muscle_group : null);
 
       if (!muscle || muscle === "Other") {
-        muscle = this.inferMuscleGroup(log.exercise_name);
+        muscle = this.inferMuscleGroup(log.exercise_name || (exercise ? exercise.name : ""));
       }
       log.target_muscle_group = muscle || "Other";
     }
@@ -163,17 +176,137 @@ class LocalDatabase {
   // Heuristic muscle group inference from exercise names
   inferMuscleGroup(name) {
     if (!name) return "Other";
-    const n = name.toLowerCase();
-    if (n.includes("overhead") || n.includes("shoulder") || n.includes("ohp") || n.includes("lateral") || n.includes("delt") || n.includes("military") || n.includes("front raise") || n.includes("rear delt")) return "Shoulders";
-    if (n.includes("row") || /\blat\b|\blats\b|pulldown|pull-down|pull-up|pullup|chin-up|chinup|back|t-bar|t bar/.test(n)) return "Back";
-    if (n.includes("bench") || n.includes("chest") || n.includes("push-up") || n.includes("pushup") || n.includes("fly") || n.includes("pec") || n.includes("incline") || n.includes("decline")) return "Chest";
-    if (n.includes("squat") || n.includes("leg press") || n.includes("quad") || n.includes("lunge") || n.includes("hack") || n.includes("leg extension")) return "Quads";
-    if (n.includes("deadlift") || n.includes("rdl") || n.includes("hamstring") || n.includes("leg curl") || n.includes("good morning")) return "Hamstrings";
-    if (n.includes("bicep") || n.includes("curl") || n.includes("preacher") || n.includes("hammer")) return "Biceps";
-    if (n.includes("tricep") || n.includes("pushdown") || n.includes("skull") || n.includes("extension") || n.includes("close-grip") || n.includes("dip")) return "Triceps";
-    if (n.includes("calf") || n.includes("calves")) return "Calves";
-    if (n.includes("abs") || /\bab\b/.test(n) || n.includes("crunch") || n.includes("plank") || n.includes("core")) return "Abs";
-    if (n.includes("glute") || n.includes("hip thrust") || n.includes("kickback") || n.includes("abductor")) return "Glutes";
+    const n = name.toLowerCase().trim();
+
+    // Shoulders
+    if (
+      n.includes("overhead") ||
+      n.includes("shoulder") ||
+      /\bohps?\b/.test(n) ||
+      n.includes("lateral") ||
+      n.includes("delt") ||
+      n.includes("military") ||
+      n.includes("front raise") ||
+      n.includes("rear delt") ||
+      n.includes("face pull") ||
+      n.includes("face-pull") ||
+      n.includes("arnold") ||
+      n.includes("upright row") ||
+      n.includes("shrug")
+    ) {
+      return "Shoulders";
+    }
+
+    // Quads / Squats
+    if (
+      n.includes("squat") ||
+      n.includes("leg press") ||
+      n.includes("quad") ||
+      n.includes("lunge") ||
+      n.includes("hack") ||
+      n.includes("leg extension") ||
+      n.includes("step up") ||
+      n.includes("step-up") ||
+      n.includes("sissy")
+    ) {
+      return "Quads";
+    }
+
+    // Hamstrings
+    if (
+      n.includes("deadlift") ||
+      /\brdls?\b/.test(n) ||
+      n.includes("hamstring") ||
+      n.includes("leg curl") ||
+      n.includes("good morning") ||
+      n.includes("glute ham")
+    ) {
+      return "Hamstrings";
+    }
+
+    // Glutes
+    if (
+      n.includes("glute") ||
+      n.includes("hip thrust") ||
+      n.includes("kickback") ||
+      n.includes("abductor") ||
+      n.includes("hip abduction") ||
+      n.includes("bridge")
+    ) {
+      return "Glutes";
+    }
+
+    // Back
+    if (
+      n.includes("row") ||
+      /\blats?\b/.test(n) ||
+      /pull[\s-]?down/.test(n) ||
+      /pull[\s-]?ups?/.test(n) ||
+      /chin[\s-]?ups?/.test(n) ||
+      n.includes("back") ||
+      n.includes("t-bar") ||
+      n.includes("t bar")
+    ) {
+      return "Back";
+    }
+
+    // Chest
+    if (
+      n.includes("bench") ||
+      n.includes("chest") ||
+      /push[\s-]?ups?/.test(n) ||
+      n.includes("fly") ||
+      n.includes("flye") ||
+      n.includes("pec") ||
+      n.includes("incline") ||
+      n.includes("decline") ||
+      n.includes("press")
+    ) {
+      return "Chest";
+    }
+
+    // Biceps
+    if (
+      n.includes("bicep") ||
+      n.includes("curl") ||
+      n.includes("preacher") ||
+      n.includes("hammer")
+    ) {
+      return "Biceps";
+    }
+
+    // Triceps
+    if (
+      n.includes("tricep") ||
+      n.includes("pushdown") ||
+      n.includes("skull") ||
+      n.includes("extension") ||
+      n.includes("close-grip") ||
+      n.includes("close grip") ||
+      /\bdips?\b/.test(n)
+    ) {
+      return "Triceps";
+    }
+
+    // Calves
+    if (n.includes("calf") || n.includes("calves")) {
+      return "Calves";
+    }
+
+    // Core / Abs
+    if (
+      n.includes("abs") ||
+      /\babs?\b/.test(n) ||
+      n.includes("crunch") ||
+      n.includes("plank") ||
+      n.includes("core") ||
+      n.includes("sit-up") ||
+      n.includes("sit up") ||
+      n.includes("leg raise")
+    ) {
+      return "Core";
+    }
+
     return "Other";
   }
 }
