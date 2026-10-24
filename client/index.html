@@ -77,7 +77,7 @@
           <div class="session-card">
             <div class="session-card-header">
               <div class="session-title-row">
-                <input type="text" id="session-name-input" class="session-title-input" value="Freeform Workout"
+                <input type="text" id="session-name-input" class="session-title-input" value=""
                   placeholder="Workout Name (e.g. Push Day, Chest &amp; Back)">
                 <button type="button" id="btn-edit-active-session-name" class="session-title-edit-btn" title="Edit Workout Name" aria-label="Edit Workout Name">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -629,7 +629,7 @@
     <div id="modal-rename-workout" class="modal-overlay hidden">
       <div class="modal-sheet">
         <div class="modal-header">
-          <h2>Rename Workout</h2>
+          <h2 id="rename-workout-modal-title">Rename Workout</h2>
           <button type="button" id="btn-close-rename-workout-modal" class="icon-btn">&times;</button>
         </div>
         <form id="form-rename-workout" class="modal-form">
@@ -638,7 +638,7 @@
           <input type="text" id="rename-session-name-input" class="form-input" required placeholder="e.g. Chest &amp; Triceps, Leg Day...">
           <div style="display: flex; gap: 10px; margin-top: 16px;">
             <button type="button" id="btn-cancel-rename-workout" class="btn btn-neutral" style="flex: 1;">Cancel</button>
-            <button type="submit" class="btn btn-primary" style="flex: 2;">Save Name</button>
+            <button type="submit" id="btn-save-rename-workout" class="btn btn-primary" style="flex: 2;">Save Name</button>
           </div>
         </form>
       </div>

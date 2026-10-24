@@ -649,7 +649,7 @@ class WorkoutApp {
     const sessionId = crypto.randomUUID();
     const newSession = {
       id: sessionId,
-      name: "Freeform Workout",
+      name: "",
       started_at: null,
       completed_at: null,
       session_notes: null,
@@ -786,7 +786,7 @@ class WorkoutApp {
       const persistSessionName = async () => {
         if (!this.activeSession) return;
         const val = nameInput.value.trim();
-        this.activeSession.name = val || "Freeform Workout";
+        this.activeSession.name = val;
         await localDB.put("workout_sessions", {
           id: this.activeSession.id,
           name: this.activeSession.name,
@@ -800,14 +800,14 @@ class WorkoutApp {
       };
 
       nameInput.addEventListener("focus", () => {
-        if (nameInput.value === "Freeform Workout") {
+        if (nameInput.value) {
           nameInput.select();
         }
       });
 
       nameInput.addEventListener("input", () => {
         if (this.activeSession) {
-          this.activeSession.name = nameInput.value.trim() || "Freeform Workout";
+          this.activeSession.name = nameInput.value.trim();
         }
         clearTimeout(sessionNameDebounce);
         sessionNameDebounce = setTimeout(persistSessionName, 300);
@@ -1213,32 +1213,7 @@ class WorkoutApp {
       });
     }
 
-    // Rename Workout Modal Close & Submit
-    const closeRenameModalBtn = document.getElementById("btn-close-rename-workout-modal");
-    if (closeRenameModalBtn) {
-      closeRenameModalBtn.addEventListener("click", () => {
-        document.getElementById("modal-rename-workout").classList.add("hidden");
-      });
-    }
-
-    const cancelRenameModalBtn = document.getElementById("btn-cancel-rename-workout");
-    if (cancelRenameModalBtn) {
-      cancelRenameModalBtn.addEventListener("click", () => {
-        document.getElementById("modal-rename-workout").classList.add("hidden");
-      });
-    }
-
-    const renameForm = document.getElementById("form-rename-workout");
-    if (renameForm) {
-      renameForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const sessionId = document.getElementById("rename-session-id").value;
-        const newName = document.getElementById("rename-session-name-input").value.trim();
-        if (!sessionId || !newName) return;
-        await this.saveWorkoutName(sessionId, newName);
-        document.getElementById("modal-rename-workout").classList.add("hidden");
-      });
-    }
+    // Note: Rename and naming modals are handled dynamically via promptWorkoutNameModal
 
     // Run Insights Button in AI Insights tab
     const runInsightsBtn = document.getElementById("btn-run-insights");
@@ -1352,8 +1327,8 @@ class WorkoutApp {
     const nameInput = document.getElementById("session-name-input");
     if (nameInput && document.activeElement !== nameInput) {
       const smartSuggestion = this.generateSmartWorkoutName(fullSession.exercise_logs);
-      nameInput.placeholder = smartSuggestion || "Workout Name (e.g. Push Day, Leg Day)";
-      nameInput.value = fullSession.name || "Freeform Workout";
+      nameInput.placeholder = smartSuggestion ? `${smartSuggestion} (Tap to name)` : "Workout Name (e.g. Push Day, Leg Day)";
+      nameInput.value = (fullSession.name && fullSession.name !== "Freeform Workout") ? fullSession.name : "";
     }
 
     const notesInput = document.getElementById("session-notes-input");
@@ -2121,20 +2096,27 @@ class WorkoutApp {
         }
       }
 
-      // Determine final workout name and prompt if still default Freeform Workout
+      // Determine final workout name and prompt with Option A modal if not explicitly named
       const nameInput = document.getElementById("session-name-input");
       let currentVal = (nameInput && nameInput.value.trim()) ? nameInput.value.trim() : (this.activeSession.name || "");
       const isDefaultFreeform = !currentVal || currentVal.toLowerCase() === "freeform workout";
 
       if (isDefaultFreeform) {
-        const smartName = this.generateSmartWorkoutName(full ? full.exercise_logs : []);
-        const userEntered = prompt("Name your workout:", smartName);
-        if (userEntered === null) {
+        const smartName = this.generateSmartWorkoutName(full ? full.exercise_logs : []) || "Workout";
+        const userEntered = await this.promptWorkoutNameModal({
+          title: "Name Your Workout",
+          initialValue: smartName,
+          placeholder: smartName,
+          confirmText: "Save & Finish"
+        });
+
+        if (!userEntered) {
           // User clicked Cancel: abort finish so user can continue editing
           if (finishBtn) finishBtn.disabled = false;
           this.isFinishingSession = false;
           return;
         }
+
         const finalName = userEntered.trim() || smartName || "Workout";
         this.activeSession.name = finalName;
         if (nameInput) nameInput.value = finalName;
@@ -2774,27 +2756,85 @@ class WorkoutApp {
     });
   }
 
-  // Open modal to rename a workout
-  openRenameWorkoutModal(sessionId, currentName = "") {
-    const modal = document.getElementById("modal-rename-workout");
-    const idInput = document.getElementById("rename-session-id");
-    const nameInput = document.getElementById("rename-session-name-input");
-    if (!modal || !idInput || !nameInput) return;
+  // Prompt modal for workout naming and renaming, returning a Promise<string | null>
+  promptWorkoutNameModal({ title = "Name Your Workout", initialValue = "", placeholder = "e.g. Chest & Triceps, Leg Day...", confirmText = "Save Name" } = {}) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById("modal-rename-workout");
+      const titleEl = document.getElementById("rename-workout-modal-title");
+      const nameInput = document.getElementById("rename-session-name-input");
+      const submitBtn = document.getElementById("btn-save-rename-workout");
+      const form = document.getElementById("form-rename-workout");
+      const cancelBtn = document.getElementById("btn-cancel-rename-workout");
+      const closeBtn = document.getElementById("btn-close-rename-workout-modal");
 
-    idInput.value = sessionId;
-    nameInput.value = currentName === "Freeform Workout" ? "" : currentName;
-    nameInput.placeholder = currentName || "Workout Name";
-    modal.classList.remove("hidden");
-    history.pushState({ isModal: true }, "");
-    setTimeout(() => {
-      nameInput.focus();
-      nameInput.select();
-    }, 50);
+      if (!modal || !nameInput || !form) {
+        resolve(initialValue || "Workout");
+        return;
+      }
+
+      if (titleEl) titleEl.textContent = title;
+      if (submitBtn) submitBtn.textContent = confirmText;
+      nameInput.value = initialValue || "";
+      nameInput.placeholder = placeholder || "e.g. Chest & Triceps, Leg Day...";
+
+      modal.classList.remove("hidden");
+      history.pushState({ isModal: true }, "");
+
+      setTimeout(() => {
+        nameInput.focus();
+        nameInput.select();
+      }, 50);
+
+      let settled = false;
+
+      const cleanup = () => {
+        modal.classList.add("hidden");
+        form.removeEventListener("submit", handleSubmit);
+        if (cancelBtn) cancelBtn.removeEventListener("click", handleCancel);
+        if (closeBtn) closeBtn.removeEventListener("click", handleCancel);
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        if (settled) return;
+        settled = true;
+        const entered = nameInput.value.trim() || initialValue || "Workout";
+        cleanup();
+        resolve(entered);
+      };
+
+      const handleCancel = (e) => {
+        if (e) e.preventDefault();
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(null);
+      };
+
+      form.addEventListener("submit", handleSubmit);
+      if (cancelBtn) cancelBtn.addEventListener("click", handleCancel);
+      if (closeBtn) closeBtn.addEventListener("click", handleCancel);
+    });
+  }
+
+  // Open modal to rename a workout
+  async openRenameWorkoutModal(sessionId, currentName = "") {
+    const defaultName = (currentName && currentName !== "Freeform Workout") ? currentName : "";
+    const newName = await this.promptWorkoutNameModal({
+      title: "Rename Workout",
+      initialValue: defaultName,
+      placeholder: defaultName || "e.g. Chest & Triceps, Leg Day...",
+      confirmText: "Save Name"
+    });
+
+    if (newName && newName.trim()) {
+      await this.saveWorkoutName(sessionId, newName.trim());
+    }
   }
 
   // Save workout name for any session (active or past)
   async saveWorkoutName(sessionId, newName) {
-    const trimmed = (newName || "").trim() || "Freeform Workout";
+    const trimmed = (newName || "").trim() || "Workout";
     const session = await localDB.get("workout_sessions", sessionId);
     if (!session) return;
     session.name = trimmed;
