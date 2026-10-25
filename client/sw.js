@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v17";
+const CACHE_NAME = "workout-tracker-v18";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -6,7 +6,6 @@ const ASSETS_TO_CACHE = [
   "./app.js",
   "./db.js",
   "./sync.js",
-  "./silence.wav",
   "./chime.wav",
   "./manifest.json",
   "./icon-192.png",
@@ -71,16 +70,48 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+let scheduledTimerId = null;
+
 // Handle background notification triggers from RestTimerManager
 self.addEventListener("message", (event) => {
-  if (event.data && event.data.type === "REST_FINISHED_NOTIFICATION") {
+  if (!event.data) return;
+
+  if (event.data.type === "SCHEDULE_REST_TIMER") {
+    if (scheduledTimerId) {
+      clearTimeout(scheduledTimerId);
+      scheduledTimerId = null;
+    }
+    const delayMs = Math.max(0, event.data.delayMs || 0);
+    const exerciseName = event.data.exerciseName || "Exercise";
+
+    scheduledTimerId = setTimeout(() => {
+      self.registration.showNotification("Rest Finished", {
+        body: `Time for your next set of ${exerciseName}!`,
+        icon: "./icon-192.png",
+        badge: "./icon-192.png",
+        vibrate: [400, 200, 400, 200, 600],
+        tag: "rest-timer-finished",
+        renotify: true
+      });
+      scheduledTimerId = null;
+    }, delayMs);
+  } else if (event.data.type === "CANCEL_REST_TIMER") {
+    if (scheduledTimerId) {
+      clearTimeout(scheduledTimerId);
+      scheduledTimerId = null;
+    }
+  } else if (event.data.type === "REST_FINISHED_NOTIFICATION") {
+    if (scheduledTimerId) {
+      clearTimeout(scheduledTimerId);
+      scheduledTimerId = null;
+    }
     const title = event.data.title || "Rest Finished";
     const body = event.data.body || "Time for your next set";
     self.registration.showNotification(title, {
       body: body,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
-      vibrate: [300, 150, 300, 150, 500],
+      vibrate: [400, 200, 400, 200, 600],
       tag: "rest-timer-finished",
       renotify: true
     });

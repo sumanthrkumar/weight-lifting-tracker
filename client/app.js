@@ -171,12 +171,14 @@ class RestTimerManager {
     this.isRunning = true;
     this.currentExerciseName = exerciseName;
 
-    // Start background audio keepalive to retain audio session on mobile screen off
+    // Schedule background notification with Service Worker before screen turns off
     try {
-      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
-      if (keepaliveAudio) {
-        keepaliveAudio.currentTime = 0;
-        keepaliveAudio.play().catch(() => {});
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: "SCHEDULE_REST_TIMER",
+          delayMs: this.duration * 1000,
+          exerciseName: this.currentExerciseName
+        });
       }
     } catch (err) {}
 
@@ -235,6 +237,15 @@ class RestTimerManager {
     } else {
       this.endTime = (this.endTime || Date.now()) + secs * 1000;
       this.remaining = Math.max(0, Math.ceil((this.endTime - Date.now()) / 1000));
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "SCHEDULE_REST_TIMER",
+            delayMs: Math.max(0, this.endTime - Date.now()),
+            exerciseName: this.currentExerciseName
+          });
+        }
+      } catch (err) {}
     }
     this.updateUI();
   }
@@ -244,14 +255,24 @@ class RestTimerManager {
     if (this.isPaused) {
       this.pausedRemainingMs = Math.max(0, (this.endTime || Date.now()) - Date.now());
       this.releaseWakeLock();
-      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
-      if (keepaliveAudio) keepaliveAudio.pause();
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: "CANCEL_REST_TIMER" });
+        }
+      } catch (err) {}
     } else {
       this.endTime = Date.now() + (this.pausedRemainingMs || this.remaining * 1000);
       this.pausedRemainingMs = null;
       this.requestWakeLock();
-      const keepaliveAudio = document.getElementById("rest-keepalive-audio");
-      if (keepaliveAudio) keepaliveAudio.play().catch(() => {});
+      try {
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: "SCHEDULE_REST_TIMER",
+            delayMs: Math.max(0, this.endTime - Date.now()),
+            exerciseName: this.currentExerciseName
+          });
+        }
+      } catch (err) {}
     }
 
     const pauseBtn = document.getElementById("btn-rest-pause");
@@ -286,11 +307,11 @@ class RestTimerManager {
       this.worker.postMessage("stop");
     }
     this.releaseWakeLock();
-    const keepaliveAudio = document.getElementById("rest-keepalive-audio");
-    if (keepaliveAudio) {
-      keepaliveAudio.pause();
-      keepaliveAudio.currentTime = 0;
-    }
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: "CANCEL_REST_TIMER" });
+      }
+    } catch (err) {}
     this.isRunning = false;
     this.endTime = null;
     this.pausedRemainingMs = null;

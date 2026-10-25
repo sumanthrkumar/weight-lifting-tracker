@@ -1,1 +1,3 @@
-I want to name workouts. RIght now they are getting saved as Freeform workout. Also want the ability to rename a workout from the history tab. 
+When the timer in-between sets starts running, all my other media volume on my phone gets drastically lower. The volume is restored after the timer goes off. 
+
+The timer still doesn't play an audio sound if i leave the app and turn the screen off. I tested this by setting a 1 min timer and left my screen off for 5 minutes. When i turn my screen on, still no noise. When I open the app, then I get the noise and notification. Kind of defeats the purpose of an alarm/timer if it doesn't notify me when its supposed to. 
