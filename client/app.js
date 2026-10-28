@@ -1027,12 +1027,108 @@ class WorkoutApp {
     });
 
     // Manual Sync Button in History
-    document.getElementById("btn-sync-manual").addEventListener("click", async () => {
-      await syncManager.pullHistory();
-      await syncManager.syncNow();
-      this.renderHistory();
-      this.updateDiagnostics();
-    });
+    const syncManualBtn = document.getElementById("btn-sync-manual");
+    if (syncManualBtn) {
+      syncManualBtn.addEventListener("click", async () => {
+        await syncManager.pullHistory();
+        await syncManager.syncNow();
+        this.renderHistory();
+        this.updateDiagnostics();
+        this.showToast("Database sync complete");
+      });
+    }
+
+    // Export Data Backup to JSON file
+    const exportBtn = document.getElementById("btn-export-backup");
+    if (exportBtn) {
+      exportBtn.addEventListener("click", async () => {
+        try {
+          const exercises = await localDB.getAll("exercises");
+          const sessions = await localDB.getAll("workout_sessions");
+          const logs = await localDB.getAll("exercise_logs");
+          const sets = await localDB.getAll("set_entries");
+
+          const backupData = {
+            version: 1,
+            exported_at: new Date().toISOString(),
+            exercises,
+            workout_sessions: sessions,
+            exercise_logs: logs,
+            set_entries: sets
+          };
+
+          const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          const dateStr = new Date().toISOString().slice(0, 10);
+          a.href = url;
+          a.download = `weight_tracker_backup_${dateStr}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          this.showToast("Backup exported successfully");
+        } catch (err) {
+          console.error("Export error:", err);
+          this.showToast("Export failed");
+        }
+      });
+    }
+
+    // Import Data Backup from JSON file
+    const importTriggerBtn = document.getElementById("btn-import-backup-trigger");
+    const importFileInput = document.getElementById("input-import-backup-file");
+    if (importTriggerBtn && importFileInput) {
+      importTriggerBtn.addEventListener("click", () => {
+        importFileInput.click();
+      });
+
+      importFileInput.addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+
+          if (!data || (!data.workout_sessions && !data.exercises)) {
+            alert("Invalid backup file format");
+            return;
+          }
+
+          if (data.exercises) {
+            for (const ex of data.exercises) {
+              await localDB.put("exercises", ex);
+            }
+          }
+          if (data.workout_sessions) {
+            for (const s of data.workout_sessions) {
+              await localDB.put("workout_sessions", s);
+            }
+          }
+          if (data.exercise_logs) {
+            for (const log of data.exercise_logs) {
+              await localDB.put("exercise_logs", log);
+            }
+          }
+          if (data.set_entries) {
+            for (const set of data.set_entries) {
+              await localDB.put("set_entries", set);
+            }
+          }
+
+          await syncManager.syncNow();
+          this.renderHistory();
+          this.renderCatalog();
+          this.showToast("Backup imported successfully!");
+        } catch (err) {
+          console.error("Import error:", err);
+          alert("Failed to parse backup file: " + err.message);
+        } finally {
+          importFileInput.value = "";
+        }
+      });
+    }
 
     // Catalog Search & Filters
     document.getElementById("exercise-search").addEventListener("input", (e) => {

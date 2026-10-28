@@ -118,6 +118,22 @@ class SyncManager {
         return new Date(s).getTime();
       };
 
+      // Self-healing: if the server database has 0 sessions, but local has completed sessions, mark them unsynced so syncNow() restores the server!
+      if (sessions.length === 0 && localSessions.length > 0) {
+        let needsRestore = false;
+        for (const ls of localSessions) {
+          if (ls.status === "completed" && ls.synced) {
+            ls.synced = false;
+            await this.db.put("workout_sessions", ls);
+            needsRestore = true;
+          }
+        }
+        if (needsRestore) {
+          console.log("[SYNC] Detected empty server database. Queued local sessions for restoration.");
+        }
+        return;
+      }
+
       for (const session of sessions) {
         const serverTime = parseUtcTime(session.started_at);
 

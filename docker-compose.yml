@@ -6,16 +6,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      # Absolute path to the database file inside the container
+      # Absolute path to the database file inside the container (maps directly to host ./data/)
       - DATABASE_URL=sqlite:////app/data/weight_tracker.db
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
-      # Named volume stored inside native POSIX Linux filesystem
-      - sqlite_data:/app/data
+      # Direct bind mount to physical Mac folder for permanent, indestructible persistence
+      - ./data:/app/data
       # Mount application code for live backend updates
       - ./app:/app/app
       # Mount client directory for immediate live frontend static updates
       - ./client:/app/client:ro
-
-volumes:
-  sqlite_data:

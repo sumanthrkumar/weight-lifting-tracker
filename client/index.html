@@ -354,14 +354,33 @@
         <section id="view-history" class="view-panel">
           <div class="history-header">
             <span class="section-label">Past Workouts</span>
-            <button id="btn-sync-manual" class="icon-btn-label">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="23 4 23 10 17 10"></polyline>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
-              </svg>
-              <span>Sync Server</span>
-            </button>
+            <div class="history-header-actions" style="display: flex; gap: 8px;">
+              <button id="btn-export-backup" class="icon-btn-label" title="Export JSON Backup">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Export</span>
+              </button>
+              <button id="btn-import-backup-trigger" class="icon-btn-label" title="Import JSON Backup">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>Import</span>
+              </button>
+              <input type="file" id="input-import-backup-file" accept=".json" style="display: none;">
+              <button id="btn-sync-manual" class="icon-btn-label">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                </svg>
+                <span>Sync DB</span>
+              </button>
+            </div>
           </div>
           <div id="history-sessions-list" class="history-list">
             <!-- Populated with past sessions -->
