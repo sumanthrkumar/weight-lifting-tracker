@@ -2606,8 +2606,12 @@ class WorkoutApp {
     }
 
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter((ex) => ex.name.toLowerCase().includes(q));
+      const q = searchQuery.toLowerCase().trim();
+      const terms = q.split(/\s+/).map((t) => (t.endsWith("s") && t.length > 3 ? t.slice(0, -1) : t));
+      filtered = filtered.filter((ex) => {
+        const hay = `${ex.name} ${ex.target_muscle_group} ${ex.default_equipment || ""}`.toLowerCase();
+        return terms.every((term) => hay.includes(term));
+      });
     }
 
     // Defensive in-memory deduplication by normalized name
@@ -2676,7 +2680,12 @@ class WorkoutApp {
       const all = await localDB.getAll("exercises");
       let filtered = all;
       if (query.trim()) {
-        filtered = filtered.filter((ex) => ex.name.toLowerCase().includes(query.toLowerCase()));
+        const q = query.toLowerCase().trim();
+        const terms = q.split(/\s+/).map((t) => (t.endsWith("s") && t.length > 3 ? t.slice(0, -1) : t));
+        filtered = filtered.filter((ex) => {
+          const hay = `${ex.name} ${ex.target_muscle_group} ${ex.default_equipment || ""}`.toLowerCase();
+          return terms.every((term) => hay.includes(term));
+        });
       }
 
       // Defensive in-memory deduplication by normalized name
