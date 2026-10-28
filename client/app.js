@@ -25,8 +25,10 @@ class RestTimerManager {
         if (!this.audioCtx && AudioClass) {
           this.audioCtx = new AudioClass();
         }
-        if (this.audioCtx && this.audioCtx.state === "suspended") {
-          this.audioCtx.resume();
+        if (this.audioCtx) {
+          this.audioCtx.resume().then(() => {
+            this.audioCtx.suspend();
+          }).catch(() => {});
         }
       } catch (e) {
         console.warn("Audio context unlock:", e);
@@ -133,6 +135,13 @@ class RestTimerManager {
         playTone(587.33, 0.0, 0.18);
         playTone(880.00, 0.22, 0.22);
         playTone(1174.66, 0.48, 0.55);
+
+        // Suspend AudioContext right after chime completes (~1.1s) to immediately restore full music/Spotify volume
+        setTimeout(() => {
+          if (this.audioCtx && this.audioCtx.state === "running") {
+            this.audioCtx.suspend().catch(() => {});
+          }
+        }, 1100);
       }
     } catch (err) {
       console.warn("Audio playback not supported:", err);
@@ -2256,13 +2265,16 @@ class WorkoutApp {
       this.resetTimerDisplay();
       if (this.restTimer) this.restTimer.skip();
 
-      // Trigger immediate background sync to server
-      await syncManager.syncNow();
-
-      // Start a fresh workout draft
+      // Immediately prepare fresh session draft and update UI (offline-first, zero waiting)
       await this.createNewActiveSession();
+      this.renderHistory();
       this.switchView("view-history");
       this.showToast("Workout saved successfully!");
+
+      // Fire background sync asynchronously without blocking the UI
+      syncManager.syncNow().catch((err) => {
+        console.warn("[SYNC] Sync deferred until server is reachable:", err);
+      });
     } finally {
       if (finishBtn) finishBtn.disabled = false;
       this.isFinishingSession = false;

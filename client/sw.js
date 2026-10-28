@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v22";
+const CACHE_NAME = "workout-tracker-v24";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -71,6 +71,7 @@ self.addEventListener("fetch", (event) => {
 });
 
 let scheduledTimerId = null;
+let scheduledTimerResolve = null;
 
 // Handle background notification triggers from RestTimerManager
 self.addEventListener("message", (event) => {
@@ -81,40 +82,74 @@ self.addEventListener("message", (event) => {
       clearTimeout(scheduledTimerId);
       scheduledTimerId = null;
     }
+    if (scheduledTimerResolve) {
+      scheduledTimerResolve();
+      scheduledTimerResolve = null;
+    }
+
     const delayMs = Math.max(0, event.data.delayMs || 0);
     const exerciseName = event.data.exerciseName || "Exercise";
 
-    scheduledTimerId = setTimeout(() => {
-      self.registration.showNotification("Rest Finished", {
-        body: `Time for your next set of ${exerciseName}!`,
-        icon: "./icon-192.png",
-        badge: "./icon-192.png",
-        vibrate: [400, 200, 400, 200, 600],
-        tag: "rest-timer-finished",
-        renotify: true
-      });
-      scheduledTimerId = null;
-    }, delayMs);
+    const waitPromise = new Promise((resolve) => {
+      scheduledTimerResolve = resolve;
+      scheduledTimerId = setTimeout(async () => {
+        try {
+          await self.registration.showNotification("Rest Complete!", {
+            body: `Time for your next set of ${exerciseName}`,
+            icon: "./icon-192.png",
+            badge: "./icon-192.png",
+            vibrate: [500, 200, 500, 200, 500],
+            tag: "rest-timer-finished",
+            renotify: true,
+            requireInteraction: true,
+            silent: false
+          });
+        } catch (err) {
+          console.error("[SW] Notification display error:", err);
+        } finally {
+          scheduledTimerId = null;
+          scheduledTimerResolve = null;
+          resolve();
+        }
+      }, delayMs);
+    });
+
+    if (event.waitUntil) {
+      event.waitUntil(waitPromise);
+    }
   } else if (event.data.type === "CANCEL_REST_TIMER") {
     if (scheduledTimerId) {
       clearTimeout(scheduledTimerId);
       scheduledTimerId = null;
+    }
+    if (scheduledTimerResolve) {
+      scheduledTimerResolve();
+      scheduledTimerResolve = null;
     }
   } else if (event.data.type === "REST_FINISHED_NOTIFICATION") {
     if (scheduledTimerId) {
       clearTimeout(scheduledTimerId);
       scheduledTimerId = null;
     }
-    const title = event.data.title || "Rest Finished";
+    if (scheduledTimerResolve) {
+      scheduledTimerResolve();
+      scheduledTimerResolve = null;
+    }
+    const title = event.data.title || "Rest Complete!";
     const body = event.data.body || "Time for your next set";
-    self.registration.showNotification(title, {
+    const p = self.registration.showNotification(title, {
       body: body,
       icon: "./icon-192.png",
       badge: "./icon-192.png",
-      vibrate: [400, 200, 400, 200, 600],
+      vibrate: [500, 200, 500, 200, 500],
       tag: "rest-timer-finished",
-      renotify: true
+      renotify: true,
+      requireInteraction: true,
+      silent: false
     });
+    if (event.waitUntil) {
+      event.waitUntil(p);
+    }
   }
 });
 

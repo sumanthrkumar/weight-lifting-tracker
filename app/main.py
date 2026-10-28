@@ -1,5 +1,6 @@
 import uuid
 from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -27,6 +28,11 @@ def get_server_info():
         "environment": APP_ENV,
         "database": db_target
     }
+
+# GET / - Redirect to Mobile PWA Client
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
+def root_redirect():
+    return RedirectResponse(url="/app/")
 
 # GET /exercises - Return all exercises ordered by name
 @app.get("/exercises", response_model=list[schemas.ExerciseResponse])
