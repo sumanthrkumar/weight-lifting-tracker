@@ -421,6 +421,7 @@ class WorkoutApp {
     this.renderHistory();
     this.renderCatalog();
     this.updateDiagnostics();
+    this.initEnvBadge();
 
     // Restore previous active tab or route from URL hash or localStorage
     const currentHash = window.location.hash;
@@ -2795,7 +2796,24 @@ class WorkoutApp {
     }
   }
 
-  // Shows local IndexedDB record counts in the AI Insights system status card
+  async initEnvBadge() {
+    try {
+      const res = await fetch("/server-info");
+      if (res.ok) {
+        const data = await res.json();
+        const badge = document.getElementById("env-badge");
+        if (badge && data.environment) {
+          badge.textContent = data.environment.toUpperCase();
+          badge.className = "env-badge " + (data.environment === "production" ? "prod" : "dev");
+          badge.classList.remove("hidden");
+        }
+      }
+    } catch (err) {
+      // Offline mode
+    }
+  }
+
+  // Shows local IndexedDB record counts and connected server info in the AI Insights system status card
   async updateDiagnostics() {
     const el = document.getElementById("storage-diagnostics");
     if (!el) return;
@@ -2805,7 +2823,25 @@ class WorkoutApp {
     const logs = await localDB.getAll("exercise_logs");
     const sets = await localDB.getAll("set_entries");
 
+    let serverEnv = "Checking...";
+    let serverDb = "";
+    try {
+      const res = await fetch("/server-info");
+      if (res.ok) {
+        const info = await res.json();
+        serverEnv = (info.environment || "unknown").toUpperCase();
+        serverDb = info.database || "";
+      } else {
+        serverEnv = "OFFLINE";
+      }
+    } catch (e) {
+      serverEnv = "OFFLINE";
+    }
+
+    const envColor = serverEnv === "PRODUCTION" ? "var(--accent-emerald, #10b981)" : "var(--accent-amber, #f59e0b)";
+
     el.innerHTML = `
+      Connected Server: <strong style="color: ${envColor}; font-weight: 700;">${serverEnv}</strong> (${window.location.port || "80"})${serverDb ? `<br><small style="color: var(--text-muted); font-size: 0.72rem;">${serverDb}</small>` : ""}<br><br>
       Local IndexedDB records:<br>
       &bull; Exercises: ${exercises.length}<br>
       &bull; Sessions: ${sessions.length} (${sessions.filter((s) => s.synced).length} synced)<br>

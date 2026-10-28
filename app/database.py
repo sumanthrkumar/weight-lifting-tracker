@@ -3,7 +3,22 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlite3 import Connection
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./weight_tracker.db")
+APP_ENV = os.getenv("APP_ENV", "development").lower()
+
+def get_default_database_url() -> str:
+    if APP_ENV == "production":
+        return "sqlite:///./data/prod/weight_tracker_prod.db"
+    return "sqlite:///./data/dev/weight_tracker_dev.db"
+
+DATABASE_URL = os.getenv("DATABASE_URL") or get_default_database_url()
+
+# Ensure the directory exists if targeting a local SQLite file
+if DATABASE_URL.startswith("sqlite:///"):
+    raw_path = DATABASE_URL.replace("sqlite:///", "")
+    if not raw_path.startswith(":memory:"):
+        db_dir = os.path.dirname(raw_path)
+        if db_dir and not os.path.exists(db_dir):
+            os.makedirs(db_dir, exist_ok=True)
 
 # Create the engine
 engine = create_engine(

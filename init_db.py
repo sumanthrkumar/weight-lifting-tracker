@@ -1,5 +1,5 @@
 from sqlalchemy import inspect, select
-from app.database import Base, engine, SessionLocal
+from app.database import Base, engine, SessionLocal, APP_ENV, DATABASE_URL
 import app.models as models
 
 DEFAULT_EXERCISES = [
@@ -98,6 +98,7 @@ DEFAULT_EXERCISES = [
 ]
 
 def init_database():
+    print(f"Connecting to database: {DATABASE_URL} (Environment: {APP_ENV})")
     print("Creating all tables in SQLite...")
     Base.metadata.create_all(bind=engine)
     inspector = inspect(engine)

@@ -1,18 +1,38 @@
 services:
-  api:
+  # =================================================================
+  # PRODUCTION SERVICE: Dedicated to real workout data from phone
+  # Port 8000, isolated to ./data/prod/weight_tracker_prod.db
+  # =================================================================
+  prod:
     build: .
-    container_name: weight_lifting_tracker_api
+    container_name: weight_lifting_tracker_prod
     restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
-      # Absolute path to the database file inside the container (maps directly to host ./data/)
-      - DATABASE_URL=sqlite:////app/data/weight_tracker.db
+      - APP_ENV=production
+      - DATABASE_URL=sqlite:////app/data/prod/weight_tracker_prod.db
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
-      # Direct bind mount to physical Mac folder for permanent, indestructible persistence
-      - ./data:/app/data
-      # Mount application code for live backend updates
+      - ./data/prod:/app/data/prod
       - ./app:/app/app
-      # Mount client directory for immediate live frontend static updates
+      - ./client:/app/client:ro
+
+  # =================================================================
+  # DEVELOPMENT & TEST SERVICE: Dedicated to development, tests & experiments
+  # Port 8001, isolated to ./data/dev/weight_tracker_dev.db
+  # =================================================================
+  dev:
+    build: .
+    container_name: weight_lifting_tracker_dev
+    restart: unless-stopped
+    ports:
+      - "8001:8000"
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=sqlite:////app/data/dev/weight_tracker_dev.db
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./data/dev:/app/data/dev
+      - ./app:/app/app
       - ./client:/app/client:ro

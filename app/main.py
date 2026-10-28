@@ -17,6 +17,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# GET /server-info - Return current environment and database isolation details
+@app.get("/server-info")
+def get_server_info():
+    from app.database import APP_ENV, DATABASE_URL
+    db_target = DATABASE_URL.split("///")[-1] if "///" in DATABASE_URL else DATABASE_URL
+    return {
+        "status": "healthy",
+        "environment": APP_ENV,
+        "database": db_target
+    }
+
 # GET /exercises - Return all exercises ordered by name
 @app.get("/exercises", response_model=list[schemas.ExerciseResponse])
 def get_exercises(db: Session = Depends(get_db)):
