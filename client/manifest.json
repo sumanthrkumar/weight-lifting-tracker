@@ -2,8 +2,10 @@
   "short_name": "Tracker",
   "name": "Weightlifting Tracker",
   "id": "/app/",
-  "start_url": "./",
-  "scope": "./",
+  "start_url": "/app/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "icons": [
     {
       "src": "icon-192.png",
@@ -25,6 +27,5 @@
   ],
   "background_color": "#161616",
   "theme_color": "#161616",
-  "display": "standalone",
   "orientation": "portrait"
 }
