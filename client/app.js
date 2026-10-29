@@ -2364,7 +2364,8 @@ class WorkoutApp {
       const timeKey = parseUtcTime(s.started_at);
       let isDuplicateTime = false;
       for (const [existingTime, existingSession] of seenTimestamps.entries()) {
-        if (Math.abs(existingTime - timeKey) < 60000) {
+        const sameName = (s.name || "").trim().toLowerCase() === (existingSession.name || "").trim().toLowerCase();
+        if (sameName && Math.abs(existingTime - timeKey) < 60000) {
           isDuplicateTime = true;
           if (!s.synced && existingSession.synced) {
             duplicateIdsToDelete.push(s.id);
