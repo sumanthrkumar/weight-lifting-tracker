@@ -2395,57 +2395,14 @@ class WorkoutApp {
       .filter((s) => s.status === "completed")
       .sort((a, b) => new Date(b.started_at) - new Date(a.started_at));
 
-    // Deduplicate sessions in memory and purge duplicates from local storage
+    // Deduplicate in memory strictly by session ID
     const seenIds = new Set();
-    const seenTimestamps = new Map();
     const uniqueSessions = [];
-    const duplicateIdsToDelete = [];
-
-    const parseUtcTime = (dt) => {
-      if (!dt) return 0;
-      const str = (typeof dt === "string" && !dt.endsWith("Z") && !dt.includes("+") && !dt.includes("-", 10))
-        ? dt + "Z"
-        : dt;
-      return new Date(str).getTime();
-    };
 
     for (const s of completed) {
-      if (seenIds.has(s.id)) {
-        duplicateIdsToDelete.push(s.id);
-        continue;
-      }
+      if (!s.id || seenIds.has(s.id)) continue;
       seenIds.add(s.id);
-
-      const timeKey = parseUtcTime(s.started_at);
-      let isDuplicateTime = false;
-      for (const [existingTime, existingSession] of seenTimestamps.entries()) {
-        const sameName = (s.name || "").trim().toLowerCase() === (existingSession.name || "").trim().toLowerCase();
-        if (sameName && Math.abs(existingTime - timeKey) < 60000) {
-          isDuplicateTime = true;
-          if (!s.synced && existingSession.synced) {
-            duplicateIdsToDelete.push(s.id);
-          } else if (s.synced && !existingSession.synced) {
-            duplicateIdsToDelete.push(existingSession.id);
-            const idx = uniqueSessions.findIndex((us) => us.id === existingSession.id);
-            if (idx !== -1) uniqueSessions[idx] = s;
-            seenTimestamps.set(timeKey, s);
-          } else {
-            duplicateIdsToDelete.push(s.id);
-          }
-          break;
-        }
-      }
-
-      if (!isDuplicateTime) {
-        seenTimestamps.set(timeKey, s);
-        uniqueSessions.push(s);
-      }
-    }
-
-    if (duplicateIdsToDelete.length > 0) {
-      for (const dupId of duplicateIdsToDelete) {
-        localDB.delete("workout_sessions", dupId).catch(console.warn);
-      }
+      uniqueSessions.push(s);
     }
 
     if (uniqueSessions.length === 0) {
