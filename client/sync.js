@@ -182,23 +182,24 @@ class SyncManager {
         return new Date(s).getTime();
       };
 
-      // Self-healing: check for any local completed sessions that are missing on the server
       const serverSessionIds = new Set(sessions.map((s) => s.id));
-      let needsRestore = false;
+
+      // Synchronize database deletions: remove local completed sessions that were deleted on the server
       for (const ls of localSessions) {
-        if (ls.status === "completed" && !serverSessionIds.has(ls.id)) {
-          ls.synced = false;
-          await this.db.put("workout_sessions", ls);
-          needsRestore = true;
+        if (ls.status === "completed" && !serverSessionIds.has(ls.id) && !ls.offline_pending) {
+          await this.db.delete("workout_sessions", ls.id);
+          const oldLogs = await this.db.getByIndex("exercise_logs", "workout_session_id", ls.id);
+          for (const ol of oldLogs) {
+            await this.db.delete("exercise_logs", ol.id);
+            const oldSets = await this.db.getByIndex("set_entries", "exercise_log_id", ol.id);
+            for (const os of oldSets) {
+              await this.db.delete("set_entries", os.id);
+            }
+          }
         }
-      }
-      if (needsRestore) {
-        console.log("[SYNC] Detected missing server session(s). Queued local sessions for sync.");
-        this.syncNow().catch(console.warn);
       }
 
       for (const session of sessions) {
-
         const normalizedStartedAt = (session.started_at && typeof session.started_at === "string" && !session.started_at.endsWith("Z") && !session.started_at.includes("+") && !session.started_at.includes("-", 10))
           ? session.started_at + "Z"
           : session.started_at;
@@ -215,8 +216,22 @@ class SyncManager {
           session_notes: session.session_notes,
           routine_id: session.routine_id,
           synced: true,
+          offline_pending: false,
           status: "completed"
         });
+
+        // Clean up any stale logs/sets if logs were modified or deleted in DB
+        const existingLogs = await this.db.getByIndex("exercise_logs", "workout_session_id", session.id);
+        const incomingLogIds = new Set((session.exercise_logs || []).map((l) => l.id));
+        for (const el of existingLogs) {
+          if (!incomingLogIds.has(el.id)) {
+            await this.db.delete("exercise_logs", el.id);
+            const existingSets = await this.db.getByIndex("set_entries", "exercise_log_id", el.id);
+            for (const es of existingSets) {
+              await this.db.delete("set_entries", es.id);
+            }
+          }
+        }
 
         if (session.exercise_logs) {
           for (const log of session.exercise_logs) {
@@ -245,13 +260,14 @@ class SyncManager {
                   reps: set.reps,
                   rir: set.rir,
                   completed: set.completed,
-                  notes: set.notes
                 });
               }
             }
           }
         }
       }
+
+      window.dispatchEvent(new CustomEvent("workout-sync-complete"));
       return { success: true, reachable: true, count: sessions.length };
     } catch (error) {
       this.serverReachable = false;
@@ -346,6 +362,7 @@ class SyncManager {
       // Mark local sessions as synced
       for (const s of unsyncedSessions) {
         s.synced = true;
+        s.offline_pending = false;
         await this.db.put("workout_sessions", s);
       }
 

@@ -1084,23 +1084,6 @@ class WorkoutApp {
         try {
           this.showToast("Checking server connection...", "info", 1500);
 
-          try {
-            const res = await fetchWithTimeout(`${API_BASE_URL}/sessions`, {}, 3000);
-            if (res.ok) {
-              const serverSessions = await res.json();
-              const serverIds = new Set(serverSessions.map((s) => s.id));
-              const localSessions = await localDB.getAll("workout_sessions");
-              for (const ls of localSessions) {
-                if (ls.status === "completed" && !serverIds.has(ls.id)) {
-                  ls.synced = false;
-                  await localDB.put("workout_sessions", ls);
-                }
-              }
-            }
-          } catch (e) {
-            console.warn("Server check notice in manual sync:", e);
-          }
-
           const pullResult = await syncManager.pullHistory();
           const syncResult = await syncManager.syncNow();
 
@@ -2353,6 +2336,7 @@ class WorkoutApp {
         this.activeSession.started_at = this.activeSession.completed_at;
       }
       this.activeSession.synced = false;
+      this.activeSession.offline_pending = true;
 
       await localDB.put("workout_sessions", this.activeSession);
       await localDB.delete("app_meta", "active_session_id");
