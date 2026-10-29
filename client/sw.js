@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v24";
+const CACHE_NAME = "workout-tracker-v25";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -12,6 +12,14 @@ const ASSETS_TO_CACHE = [
   "./icon-512.png",
   "./icon.svg"
 ];
+
+function fetchWithTimeout(request, timeoutMs = 2500) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(request, { signal: controller.signal }).finally(() => {
+    clearTimeout(id);
+  });
+}
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -39,34 +47,96 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
   // Do not intercept backend REST API calls
   if (
     url.pathname.startsWith("/exercises") ||
     url.pathname.startsWith("/sessions") ||
     url.pathname.startsWith("/sync") ||
-    url.pathname.startsWith("/coach")
+    url.pathname.startsWith("/coach") ||
+    url.pathname.startsWith("/server-info")
   ) {
     return;
   }
 
-  // Network-First with Offline Cache Fallback
+  // Only handle GET requests
+  if (event.request.method !== "GET") {
+    return;
+  }
+
+  // Navigation requests: Return cached app shell immediately (instant offline load)
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      (async () => {
+        const cached =
+          (await caches.match(event.request)) ||
+          (await caches.match("./index.html")) ||
+          (await caches.match("./"));
+
+        if (cached) {
+          // Revalidate in background if server is online without blocking page load
+          fetchWithTimeout(event.request, 2500)
+            .then(async (networkResponse) => {
+              if (networkResponse && networkResponse.status === 200) {
+                const cache = await caches.open(CACHE_NAME);
+                await cache.put(event.request, networkResponse.clone());
+                await cache.put("./index.html", networkResponse);
+              }
+            })
+            .catch(() => {});
+          return cached;
+        }
+
+        // Cache miss: fetch from network
+        try {
+          const networkResponse = await fetchWithTimeout(event.request, 3500);
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+            cache.put("./index.html", networkResponse.clone());
+          }
+          return networkResponse;
+        } catch (err) {
+          const fallback = (await caches.match("./index.html")) || (await caches.match("./"));
+          if (fallback) return fallback;
+          throw err;
+        }
+      })()
+    );
+    return;
+  }
+
+  // Static assets: Cache-first with background revalidation
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
+    (async () => {
+      const cached = await caches.match(event.request);
+      if (cached) {
+        // Background revalidation
+        fetchWithTimeout(event.request, 2500)
+          .then(async (networkResponse) => {
+            if (networkResponse && networkResponse.status === 200) {
+              const cache = await caches.open(CACHE_NAME);
+              await cache.put(event.request, networkResponse);
+            }
+          })
+          .catch(() => {});
+        return cached;
+      }
+
+      // Not in cache yet: fetch from network
+      try {
+        const networkResponse = await fetchWithTimeout(event.request, 3000);
         if (networkResponse && networkResponse.status === 200) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseClone));
+          const cache = await caches.open(CACHE_NAME);
+          cache.put(event.request, networkResponse.clone());
         }
         return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(event.request).then((cached) => {
-          if (cached) return cached;
-          if (event.request.mode === "navigate") {
-            return caches.match("./index.html");
-          }
-        });
-      })
+      } catch (err) {
+        const fallback = await caches.match(event.request);
+        if (fallback) return fallback;
+        throw err;
+      }
+    })()
   );
 });
 

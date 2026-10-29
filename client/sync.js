@@ -2,10 +2,19 @@
 
 const API_BASE_URL = window.location.origin;
 
+function fetchWithTimeout(url, options = {}, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const config = { ...options, signal: controller.signal };
+  return fetch(url, config).finally(() => clearTimeout(id));
+}
+window.fetchWithTimeout = fetchWithTimeout;
+
 class SyncManager {
   constructor(db) {
     this.db = db;
     this.isOnline = navigator.onLine;
+    this.serverReachable = null;
     this.isSyncing = false;
   }
 
@@ -44,10 +53,19 @@ class SyncManager {
 
     if (statusText) {
       text.textContent = statusText;
+      if (dot) {
+        if (statusText.includes("Online") || statusText.includes("Synced")) {
+          dot.className = "status-dot online";
+        } else if (statusText.includes("Pending")) {
+          dot.className = "status-dot draft";
+        } else {
+          dot.className = "status-dot offline";
+        }
+      }
       return;
     }
 
-    if (this.isOnline) {
+    if (this.isOnline && this.serverReachable !== false) {
       text.textContent = "Online (Synced)";
       if (dot) dot.className = "status-dot online";
     } else {
@@ -61,8 +79,9 @@ class SyncManager {
     if (!this.isOnline) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/exercises`);
+      const response = await fetchWithTimeout(`${API_BASE_URL}/exercises`, {}, 3000);
       if (!response.ok) throw new Error("Failed to fetch exercises");
+      this.serverReachable = true;
 
       const serverExercises = await response.json();
       const localExercises = await this.db.getAll("exercises");
@@ -95,7 +114,8 @@ class SyncManager {
       }
       return serverExercises;
     } catch (error) {
-      console.warn("Could not pull exercises from server:", error);
+      this.serverReachable = false;
+      console.warn("Could not pull exercises from server (laptop may be off):", error);
     }
   }
 
@@ -104,8 +124,9 @@ class SyncManager {
     if (!this.isOnline) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/sessions`);
+      const response = await fetchWithTimeout(`${API_BASE_URL}/sessions`, {}, 3000);
       if (!response.ok) throw new Error("Failed to fetch sessions");
+      this.serverReachable = true;
 
       const sessions = await response.json();
       const localSessions = await this.db.getAll("workout_sessions");
@@ -210,7 +231,8 @@ class SyncManager {
         }
       }
     } catch (error) {
-      console.warn("Could not pull history from server:", error);
+      this.serverReachable = false;
+      console.warn("Could not pull history from server (laptop may be off):", error);
     }
   }
 
@@ -230,7 +252,11 @@ class SyncManager {
 
       if (unsyncedSessions.length === 0) {
         this.isSyncing = false;
-        this.updateStatusBadge("Online (Synced)");
+        if (this.serverReachable === false) {
+          this.updateStatusBadge("Offline (Local)");
+        } else {
+          this.updateStatusBadge("Online (Synced)");
+        }
         return;
       }
 
@@ -268,15 +294,17 @@ class SyncManager {
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/sync`, {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessions: payloadSessions })
-      });
+      }, 4000);
 
       if (!response.ok) {
         throw new Error(`Sync failed with status: ${response.status}`);
       }
+
+      this.serverReachable = true;
 
       // Mark local sessions as synced
       for (const s of unsyncedSessions) {
@@ -287,7 +315,8 @@ class SyncManager {
       window.dispatchEvent(new CustomEvent("workout-sync-complete"));
       this.updateStatusBadge("Online (Synced)");
     } catch (error) {
-      console.warn("Background sync error:", error);
+      this.serverReachable = false;
+      console.warn("Background sync error (laptop may be off):", error);
       this.updateStatusBadge("Sync Pending");
     } finally {
       this.isSyncing = false;

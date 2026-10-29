@@ -386,6 +386,13 @@ class RestTimerManager {
   }
 }
 
+const fetchWithTimeout = window.fetchWithTimeout || function(url, options = {}, timeoutMs = 3000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  const config = { ...options, signal: controller.signal };
+  return fetch(url, config).finally(() => clearTimeout(id));
+};
+
 class WorkoutApp {
   constructor() {
     this.currentView = "view-workout";
@@ -405,32 +412,23 @@ class WorkoutApp {
     await localDB.init();
     syncManager.init();
 
-    // Clean up duplicates and re-link local logs to canonical IDs
-    await this.deduplicateExercises();
-
-    // Pull catalog from server if connected
-    await syncManager.pullExercises();
-    await syncManager.pullHistory();
-    await syncManager.syncNow();
-
-    // Deduplicate once more after sync and seed defaults if empty
+    // Clean up duplicates and seed local defaults if empty
     await this.deduplicateExercises();
     await this.seedDefaultExercisesIfEmpty();
     await this.backfillLogMuscleGroups();
 
-    // Restore active workout or create a fresh draft
+    // Restore active workout or create a fresh draft from local IndexedDB
     await this.restoreOrCreateActiveSession();
 
     // Bind event listeners
     this.bindEvents();
 
-    // Initial render
+    // Initial render from local IndexedDB (instant offline load)
     this.populateMuscleGroupDropdowns();
     this.renderWorkoutOverview();
     this.renderHistory();
     this.renderCatalog();
     this.updateDiagnostics();
-    this.initEnvBadge();
 
     // Restore previous active tab or route from URL hash or localStorage
     const currentHash = window.location.hash;
@@ -471,6 +469,25 @@ class WorkoutApp {
       this.renderCatalog();
       this.updateDiagnostics();
     });
+
+    // Run network tasks asynchronously in background so initial UI render is instantaneous
+    this.initEnvBadge();
+    this.syncInBackground();
+  }
+
+  async syncInBackground() {
+    try {
+      await syncManager.pullExercises();
+      await syncManager.pullHistory();
+      await syncManager.syncNow();
+      await this.deduplicateExercises();
+      this.renderWorkoutOverview();
+      this.renderHistory();
+      this.renderCatalog();
+      this.updateDiagnostics();
+    } catch (err) {
+      console.warn("Background sync skipped or offline:", err);
+    }
   }
 
   // Scans local IndexedDB exercises and removes duplicates with identical normalized names,
@@ -1197,11 +1214,11 @@ class WorkoutApp {
       // If online, also send to server
       if (navigator.onLine) {
         try {
-          const res = await fetch(`${API_BASE_URL}/exercises`, {
+          const res = await fetchWithTimeout(`${API_BASE_URL}/exercises`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(newEx)
-          });
+          }, 2500);
           if (res.status === 409) {
             console.warn("Exercise already exists on server");
           }
@@ -1263,7 +1280,7 @@ class WorkoutApp {
         // Also update backend if online
         if (navigator.onLine) {
           try {
-            await fetch(`${API_BASE_URL}/exercises/${id}`, {
+            await fetchWithTimeout(`${API_BASE_URL}/exercises/${id}`, {
               method: "PUT",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
@@ -1271,7 +1288,7 @@ class WorkoutApp {
                 target_muscle_group: muscle,
                 default_equipment: equipment
               })
-            });
+            }, 2500);
           } catch (err) {
             console.warn("Exercise updated locally, server offline:", err);
           }
@@ -1308,7 +1325,7 @@ class WorkoutApp {
         // Delete from backend if online
         if (navigator.onLine) {
           try {
-            await fetch(`${API_BASE_URL}/exercises/${id}`, { method: "DELETE" });
+            await fetchWithTimeout(`${API_BASE_URL}/exercises/${id}`, { method: "DELETE" }, 2500);
           } catch (err) {
             console.warn("Exercise deleted locally, server offline:", err);
           }
@@ -1909,11 +1926,11 @@ class WorkoutApp {
         }))
       };
 
-      const res = await fetch("/coach/exercise", {
+      const res = await fetchWithTimeout("/coach/exercise", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      });
+      }, 2500);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -2586,7 +2603,7 @@ class WorkoutApp {
 
           if (navigator.onLine && session.synced) {
             try {
-              await fetch(`${API_BASE_URL}/sessions/${session.id}`, { method: "DELETE" });
+              await fetchWithTimeout(`${API_BASE_URL}/sessions/${session.id}`, { method: "DELETE" }, 2500);
             } catch (err) {
               console.warn("Could not delete session from server:", err);
             }
@@ -2819,7 +2836,7 @@ class WorkoutApp {
 
   async initEnvBadge() {
     try {
-      const res = await fetch("/server-info");
+      const res = await fetchWithTimeout("/server-info", {}, 1500);
       if (res.ok) {
         const data = await res.json();
         const badge = document.getElementById("env-badge");
@@ -2847,7 +2864,7 @@ class WorkoutApp {
     let serverEnv = "Checking...";
     let serverDb = "";
     try {
-      const res = await fetch("/server-info");
+      const res = await fetchWithTimeout("/server-info", {}, 1500);
       if (res.ok) {
         const info = await res.json();
         serverEnv = (info.environment || "unknown").toUpperCase();
@@ -3027,11 +3044,11 @@ class WorkoutApp {
     // Attempt direct PATCH if online
     if (navigator.onLine) {
       try {
-        const patchRes = await fetch(`${API_BASE_URL}/sessions/${sessionId}`, {
+        const patchRes = await fetchWithTimeout(`${API_BASE_URL}/sessions/${sessionId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name: trimmed })
-        });
+        }, 2500);
         if (patchRes.ok) {
           session.synced = true;
           await localDB.put("workout_sessions", session);
@@ -3314,7 +3331,7 @@ class WorkoutApp {
     // Attempt server request (time-boxed so the UI never hangs)
     if (navigator.onLine) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
       try {
         const res = await fetch(`${API_BASE_URL}/coach/workout`, {
           method: "POST",
