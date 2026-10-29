@@ -16,12 +16,40 @@ class SyncManager {
     this.isOnline = navigator.onLine;
     this.serverReachable = null;
     this.isSyncing = false;
+    this.syncQueued = false;
+    this.pollInterval = null;
   }
 
   init() {
     window.addEventListener("online", () => this.handleNetworkChange(true));
     window.addEventListener("offline", () => this.handleNetworkChange(false));
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        this.syncNow().catch(console.warn);
+      }
+    });
+
+    if (!this.pollInterval) {
+      this.pollInterval = setInterval(() => {
+        this.checkAndSyncPending();
+      }, 10000);
+    }
+
     this.updateStatusBadge();
+  }
+
+  async checkAndSyncPending() {
+    try {
+      const allSessions = await this.db.getAll("workout_sessions");
+      const hasUnsynced = allSessions.some(
+        (s) => s.status === "completed" && s.synced === false
+      );
+      if (hasUnsynced && !this.isSyncing) {
+        await this.syncNow();
+      }
+    } catch (e) {
+      // Ignore background check errors
+    }
   }
 
   handleNetworkChange(isOnline) {
@@ -156,11 +184,13 @@ class SyncManager {
 
       for (const session of sessions) {
         const serverTime = parseUtcTime(session.started_at);
+        const serverName = (session.name || "").trim().toLowerCase();
 
-        // Find if an existing local completed session has a different ID but matches this server session's timestamp
+        // Find if an existing local completed session has a different ID but matches this server session's timestamp and name
         const matchingLocal = localSessions.find((ls) =>
           ls.id !== session.id &&
           ls.status === "completed" &&
+          (ls.name || "").trim().toLowerCase() === serverName &&
           Math.abs(parseUtcTime(ls.started_at) - serverTime) < 60000
         );
 
@@ -237,7 +267,10 @@ class SyncManager {
 
   // Push unsynced sessions to POST /sync
   async syncNow() {
-    if (!this.isOnline || this.isSyncing) return;
+    if (this.isSyncing) {
+      this.syncQueued = true;
+      return;
+    }
 
     try {
       this.isSyncing = true;
@@ -250,7 +283,6 @@ class SyncManager {
       );
 
       if (unsyncedSessions.length === 0) {
-        this.isSyncing = false;
         if (this.serverReachable === false) {
           this.updateStatusBadge("Offline (Local)");
         } else {
@@ -319,6 +351,10 @@ class SyncManager {
       this.updateStatusBadge("Sync Pending");
     } finally {
       this.isSyncing = false;
+      if (this.syncQueued) {
+        this.syncQueued = false;
+        setTimeout(() => this.syncNow(), 500);
+      }
     }
   }
 }
