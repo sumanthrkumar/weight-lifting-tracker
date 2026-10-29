@@ -1082,7 +1082,8 @@ class WorkoutApp {
     if (syncManualBtn) {
       syncManualBtn.addEventListener("click", async () => {
         try {
-          this.showToast("Syncing with database...", "info", 1500);
+          this.showToast("Checking server connection...", "info", 1500);
+
           try {
             const res = await fetchWithTimeout(`${API_BASE_URL}/sessions`, {}, 3000);
             if (res.ok) {
@@ -1100,15 +1101,27 @@ class WorkoutApp {
             console.warn("Server check notice in manual sync:", e);
           }
 
-          await syncManager.pullHistory();
-          await syncManager.syncNow();
+          const pullResult = await syncManager.pullHistory();
+          const syncResult = await syncManager.syncNow();
+
           await this.renderHistory();
           await this.updateDiagnostics();
-          this.showToast("Database sync complete");
+
+          if (syncManager.serverReachable === false || (!pullResult?.reachable && !syncResult?.reachable)) {
+            this.showToast("Server offline. Workouts saved locally on this device.", "warning", 3500);
+            return;
+          }
+
+          const count = syncResult?.syncedCount || 0;
+          if (count > 0) {
+            this.showToast(`Synced ${count} workout${count === 1 ? "" : "s"} to database`, "success", 2500);
+          } else {
+            this.showToast("Database already up to date", "info", 2000);
+          }
         } catch (err) {
           console.warn("Manual sync error:", err);
           await this.renderHistory();
-          this.showToast("Sync completed locally");
+          this.showToast("Server offline. Workouts saved locally on this device.", "warning", 3500);
         }
       });
     }
@@ -1478,7 +1491,7 @@ class WorkoutApp {
       subTitleEl.classList.remove("hidden");
       timerBadge.classList.remove("hidden");
       if (globalRestPill) globalRestPill.classList.add("hidden");
-      if (typeof syncManager !== "undefined") syncManager.updateStatusBadge("Online (Synced)");
+      if (typeof syncManager !== "undefined") syncManager.updateStatusBadge();
     } else {
       backBtn.classList.add("hidden");
       subTitleEl.classList.add("hidden");
@@ -1642,6 +1655,7 @@ class WorkoutApp {
     msgEl.textContent = message;
 
     if (contentEl && iconEl) {
+      contentEl.classList.remove("toast-error", "toast-warning", "toast-info");
       if (type === "error") {
         contentEl.classList.add("toast-error");
         iconEl.innerHTML = `
@@ -1651,8 +1665,25 @@ class WorkoutApp {
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
         `;
+      } else if (type === "warning") {
+        contentEl.classList.add("toast-warning");
+        iconEl.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        `;
+      } else if (type === "info") {
+        contentEl.classList.add("toast-info");
+        iconEl.innerHTML = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        `;
       } else {
-        contentEl.classList.remove("toast-error");
         iconEl.innerHTML = `
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>

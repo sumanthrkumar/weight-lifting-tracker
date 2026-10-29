@@ -1154,6 +1154,28 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 16px rgba(239, 68, 68, 0.25);
 }
 
+.toast-content.toast-warning {
+  background: #2b2312;
+  border-color: rgba(234, 179, 8, 0.55);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 16px rgba(234, 179, 8, 0.25);
+}
+
+.toast-content.toast-warning .toast-icon {
+  background: #eab308;
+  color: #1a1403;
+}
+
+.toast-content.toast-info {
+  background: #121f2b;
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 16px rgba(56, 189, 248, 0.25);
+}
+
+.toast-content.toast-info .toast-icon {
+  background: #38bdf8;
+  color: #061824;
+}
+
 .toast-icon {
   display: flex;
   align-items: center;

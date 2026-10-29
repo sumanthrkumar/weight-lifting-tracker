@@ -93,9 +93,12 @@ class SyncManager {
       return;
     }
 
-    if (this.isOnline && this.serverReachable !== false) {
+    if (this.isOnline && this.serverReachable === true) {
       text.textContent = "Online (Synced)";
       if (dot) dot.className = "status-dot online";
+    } else if (this.isOnline && this.serverReachable === null) {
+      text.textContent = "Connecting...";
+      if (dot) dot.className = "status-dot syncing";
     } else {
       text.textContent = "Offline (Local)";
       if (dot) dot.className = "status-dot offline";
@@ -104,12 +107,17 @@ class SyncManager {
 
   // Pull exercise library from server into local IndexedDB and deduplicate by normalized name
   async pullExercises() {
-    if (!this.isOnline) return;
+    if (!this.isOnline) {
+      this.serverReachable = false;
+      this.updateStatusBadge();
+      return { success: false, reachable: false, reason: "offline" };
+    }
 
     try {
       const response = await fetchWithTimeout(`${API_BASE_URL}/exercises`, {}, 3000);
       if (!response.ok) throw new Error("Failed to fetch exercises");
       this.serverReachable = true;
+      this.updateStatusBadge();
 
       const serverExercises = await response.json();
       const localExercises = await this.db.getAll("exercises");
@@ -140,21 +148,28 @@ class SyncManager {
         // Store canonical exercise record
         await this.db.put("exercises", serverEx);
       }
-      return serverExercises;
+      return { success: true, reachable: true, count: serverExercises.length };
     } catch (error) {
       this.serverReachable = false;
+      this.updateStatusBadge();
       console.warn("Could not pull exercises from server (laptop may be off):", error);
+      return { success: false, reachable: false, error };
     }
   }
 
   // Pull past workout history from server into local IndexedDB
   async pullHistory() {
-    if (!this.isOnline) return;
+    if (!this.isOnline) {
+      this.serverReachable = false;
+      this.updateStatusBadge();
+      return { success: false, reachable: false, reason: "offline" };
+    }
 
     try {
       const response = await fetchWithTimeout(`${API_BASE_URL}/sessions`, {}, 3000);
       if (!response.ok) throw new Error("Failed to fetch sessions");
       this.serverReachable = true;
+      this.updateStatusBadge();
 
       const sessions = await response.json();
       const localSessions = await this.db.getAll("workout_sessions");
@@ -259,9 +274,12 @@ class SyncManager {
           }
         }
       }
+      return { success: true, reachable: true, count: sessions.length };
     } catch (error) {
       this.serverReachable = false;
+      this.updateStatusBadge();
       console.warn("Could not pull history from server (laptop may be off):", error);
+      return { success: false, reachable: false, error };
     }
   }
 
@@ -269,7 +287,7 @@ class SyncManager {
   async syncNow() {
     if (this.isSyncing) {
       this.syncQueued = true;
-      return;
+      return { success: false, inProgress: true };
     }
 
     try {
@@ -285,10 +303,20 @@ class SyncManager {
       if (unsyncedSessions.length === 0) {
         if (this.serverReachable === false) {
           this.updateStatusBadge("Offline (Local)");
-        } else {
+          return { success: false, reachable: false, syncedCount: 0 };
+        } else if (this.serverReachable === true) {
           this.updateStatusBadge("Online (Synced)");
+          return { success: true, reachable: true, syncedCount: 0 };
+        } else {
+          try {
+            const probe = await fetchWithTimeout(`${API_BASE_URL}/server-info`, {}, 1500);
+            this.serverReachable = probe.ok;
+          } catch {
+            this.serverReachable = false;
+          }
+          this.updateStatusBadge();
+          return { success: this.serverReachable, reachable: this.serverReachable, syncedCount: 0 };
         }
-        return;
       }
 
       // Assemble full nested payload for each session
@@ -345,10 +373,12 @@ class SyncManager {
 
       window.dispatchEvent(new CustomEvent("workout-sync-complete"));
       this.updateStatusBadge("Online (Synced)");
+      return { success: true, reachable: true, syncedCount: unsyncedSessions.length };
     } catch (error) {
       this.serverReachable = false;
       console.warn("Background sync error (laptop may be off):", error);
       this.updateStatusBadge("Sync Pending");
+      return { success: false, reachable: false, error };
     } finally {
       this.isSyncing = false;
       if (this.syncQueued) {
