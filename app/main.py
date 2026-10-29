@@ -344,3 +344,4 @@ from fastapi.staticfiles import StaticFiles
 
 if os.path.exists("client"):
     app.mount("/app", StaticFiles(directory="client", html=True), name="client")
+    app.mount("/", StaticFiles(directory="client", html=False), name="client_root")

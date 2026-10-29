@@ -1081,11 +1081,35 @@ class WorkoutApp {
     const syncManualBtn = document.getElementById("btn-sync-manual");
     if (syncManualBtn) {
       syncManualBtn.addEventListener("click", async () => {
-        await syncManager.pullHistory();
-        await syncManager.syncNow();
-        this.renderHistory();
-        this.updateDiagnostics();
-        this.showToast("Database sync complete");
+        try {
+          this.showToast("Syncing with database...", "info", 1500);
+          try {
+            const res = await fetchWithTimeout(`${API_BASE_URL}/sessions`, {}, 3000);
+            if (res.ok) {
+              const serverSessions = await res.json();
+              const serverIds = new Set(serverSessions.map((s) => s.id));
+              const localSessions = await localDB.getAll("workout_sessions");
+              for (const ls of localSessions) {
+                if (ls.status === "completed" && !serverIds.has(ls.id)) {
+                  ls.synced = false;
+                  await localDB.put("workout_sessions", ls);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("Server check notice in manual sync:", e);
+          }
+
+          await syncManager.pullHistory();
+          await syncManager.syncNow();
+          await this.renderHistory();
+          await this.updateDiagnostics();
+          this.showToast("Database sync complete");
+        } catch (err) {
+          console.warn("Manual sync error:", err);
+          await this.renderHistory();
+          this.showToast("Sync completed locally");
+        }
       });
     }
 

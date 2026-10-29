@@ -1,16 +1,16 @@
-const CACHE_NAME = "workout-tracker-v29";
+const CACHE_NAME = "workout-tracker-v30";
 const ASSETS_TO_CACHE = [
-  "./",
-  "./index.html",
-  "./style.css",
-  "./app.js",
-  "./db.js",
-  "./sync.js",
-  "./chime.wav",
-  "./manifest.json",
-  "./icon-192.png",
-  "./icon-512.png",
-  "./icon.svg"
+  "/app/",
+  "/app/index.html",
+  "/app/style.css",
+  "/app/app.js",
+  "/app/db.js",
+  "/app/sync.js",
+  "/app/chime.wav",
+  "/app/manifest.json",
+  "/app/icon-192.png",
+  "/app/icon-512.png",
+  "/app/icon.svg"
 ];
 
 function fetchWithTimeout(request, timeoutMs = 2500) {
@@ -25,16 +25,26 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      await cache.addAll(ASSETS_TO_CACHE);
+      for (const asset of ASSETS_TO_CACHE) {
+        try {
+          const res = await fetch(asset);
+          if (res.ok) {
+            await cache.put(asset, res);
+          }
+        } catch (err) {
+          console.warn("Could not pre-cache", asset, err);
+        }
+      }
 
       // Explicitly cache HTML shell under all common root and app entry routes
-      const htmlResponse = await cache.match("./index.html");
+      const htmlResponse = (await cache.match("/app/index.html")) || (await cache.match("/app/"));
       if (htmlResponse) {
         await Promise.all([
           cache.put("/", htmlResponse.clone()),
           cache.put("/app", htmlResponse.clone()),
           cache.put("/app/", htmlResponse.clone()),
-          cache.put("/app/index.html", htmlResponse.clone())
+          cache.put("./index.html", htmlResponse.clone()),
+          cache.put("./", htmlResponse.clone())
         ]);
       }
     })()
