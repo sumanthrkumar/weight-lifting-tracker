@@ -386,13 +386,6 @@ class RestTimerManager {
   }
 }
 
-const fetchWithTimeout = window.fetchWithTimeout || function(url, options = {}, timeoutMs = 3000) {
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeoutMs);
-  const config = { ...options, signal: controller.signal };
-  return fetch(url, config).finally(() => clearTimeout(id));
-};
-
 class WorkoutApp {
   constructor() {
     this.currentView = "view-workout";
@@ -409,26 +402,53 @@ class WorkoutApp {
   }
 
   async init() {
-    await localDB.init();
-    syncManager.init();
+    try {
+      await localDB.init();
+    } catch (err) {
+      console.warn("Local DB init notice:", err);
+    }
+
+    if (typeof syncManager !== "undefined" && syncManager.init) {
+      try {
+        syncManager.init();
+      } catch (err) {
+        console.warn("Sync manager init notice:", err);
+      }
+    }
+
+    // Bind event listeners early so all navigation tabs and user actions always work
+    try {
+      this.bindEvents();
+    } catch (err) {
+      console.error("Critical error binding events:", err);
+    }
 
     // Clean up duplicates and seed local defaults if empty
-    await this.deduplicateExercises();
-    await this.seedDefaultExercisesIfEmpty();
-    await this.backfillLogMuscleGroups();
+    try {
+      await this.deduplicateExercises();
+      await this.seedDefaultExercisesIfEmpty();
+      await this.backfillLogMuscleGroups();
+    } catch (err) {
+      console.warn("Data cleanup notice:", err);
+    }
 
     // Restore active workout or create a fresh draft from local IndexedDB
-    await this.restoreOrCreateActiveSession();
-
-    // Bind event listeners
-    this.bindEvents();
+    try {
+      await this.restoreOrCreateActiveSession();
+    } catch (err) {
+      console.warn("Restore active session notice:", err);
+    }
 
     // Initial render from local IndexedDB (instant offline load)
-    this.populateMuscleGroupDropdowns();
-    this.renderWorkoutOverview();
-    this.renderHistory();
-    this.renderCatalog();
-    this.updateDiagnostics();
+    try {
+      this.populateMuscleGroupDropdowns();
+      this.renderWorkoutOverview();
+      this.renderHistory();
+      this.renderCatalog();
+      this.updateDiagnostics();
+    } catch (err) {
+      console.warn("Initial render notice:", err);
+    }
 
     // Restore previous active tab or route from URL hash or localStorage
     const currentHash = window.location.hash;
@@ -463,11 +483,15 @@ class WorkoutApp {
 
     // Listen for sync completion events to update UI
     window.addEventListener("workout-sync-complete", async () => {
-      await this.deduplicateExercises();
-      this.renderHistory();
-      this.renderWorkoutOverview();
-      this.renderCatalog();
-      this.updateDiagnostics();
+      try {
+        await this.deduplicateExercises();
+        this.renderHistory();
+        this.renderWorkoutOverview();
+        this.renderCatalog();
+        this.updateDiagnostics();
+      } catch (err) {
+        console.warn("Workout sync complete handler notice:", err);
+      }
     });
 
     // Run network tasks asynchronously in background so initial UI render is instantaneous
@@ -1430,7 +1454,7 @@ class WorkoutApp {
       subTitleEl.classList.remove("hidden");
       timerBadge.classList.remove("hidden");
       if (globalRestPill) globalRestPill.classList.add("hidden");
-      syncManager.updateStatusBadge("Online (Synced)");
+      if (typeof syncManager !== "undefined") syncManager.updateStatusBadge("Online (Synced)");
     } else {
       backBtn.classList.add("hidden");
       subTitleEl.classList.add("hidden");
@@ -1442,19 +1466,19 @@ class WorkoutApp {
 
       if (viewId === "view-workout") {
         titleEl.textContent = "Workout Overview";
-        syncManager.updateStatusBadge("Local (Draft Mode)", true);
+        if (typeof syncManager !== "undefined") syncManager.updateStatusBadge("Local (Draft Mode)", true);
         this.renderWorkoutOverview();
       } else if (viewId === "view-history") {
         titleEl.textContent = "Workout History";
-        syncManager.updateStatusBadge();
+        if (typeof syncManager !== "undefined") syncManager.updateStatusBadge();
         this.renderHistory();
       } else if (viewId === "view-exercises") {
         titleEl.textContent = "Exercise Library";
-        syncManager.updateStatusBadge();
+        if (typeof syncManager !== "undefined") syncManager.updateStatusBadge();
         this.renderCatalog();
       } else if (viewId === "view-insights") {
         titleEl.textContent = "AI Insights";
-        syncManager.updateStatusBadge();
+        if (typeof syncManager !== "undefined") syncManager.updateStatusBadge();
         this.renderInsightsView();
       }
     }

@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v25";
+const CACHE_NAME = "workout-tracker-v26";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -48,15 +48,18 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
-  // Do not intercept backend REST API calls
-  if (
-    url.pathname.startsWith("/exercises") ||
-    url.pathname.startsWith("/sessions") ||
-    url.pathname.startsWith("/sync") ||
-    url.pathname.startsWith("/coach") ||
-    url.pathname.startsWith("/server-info")
-  ) {
-    return;
+  // Only bypass backend REST API calls (ensure static assets like sync.js, style.css are always cached)
+  const isStaticAsset = /\.(js|css|html|json|png|svg|wav|ico|woff2?|ttf)$/i.test(url.pathname);
+  if (!isStaticAsset) {
+    if (
+      url.pathname === "/sync" ||
+      url.pathname === "/server-info" ||
+      url.pathname.startsWith("/exercises") ||
+      url.pathname.startsWith("/sessions") ||
+      url.pathname.startsWith("/coach")
+    ) {
+      return;
+    }
   }
 
   // Only handle GET requests
