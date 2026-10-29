@@ -26,12 +26,11 @@ engine = create_engine(
     connect_args={"check_same_thread": False}
 )
 
-# SQLite PRAGMA hook for WAL mode and Foreign Keys
+# SQLite PRAGMA hook for single-file durability and Foreign Keys
 @event.listens_for(engine, "connect")
 def set_sqlite_pragma(dbapi_connection: Connection, connection_record):
-    # Low-level DB-API cursor (similar to a raw JDBC java.sql.Connection cursor)
     cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA journal_mode=DELETE")
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.close()
 
