@@ -3,6 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
+  <base href="/app/">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <meta name="theme-color" content="#161616">
   <meta name="mobile-web-app-capable" content="yes">
@@ -680,13 +681,40 @@
   <script src="app.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
-      window.addEventListener("load", () => {
-        navigator.serviceWorker.register("./sw.js").then((reg) => {
-          reg.update().catch(() => {});
-        }).catch((err) => {
-          console.warn("ServiceWorker registration failed:", err);
-        });
-      });
+      const registerSW = async () => {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            const scopePath = new URL(reg.scope).pathname;
+            if (scopePath !== "/") {
+              await reg.unregister();
+            }
+          }
+        } catch (e) {}
+
+        navigator.serviceWorker.register("/sw.js", { scope: "/" })
+          .then((reg) => {
+            reg.update().catch(() => {});
+          })
+          .catch(() => {
+            return navigator.serviceWorker.register("./sw.js", { scope: "/" })
+              .then((reg) => {
+                reg.update().catch(() => {});
+              });
+          })
+          .catch(() => {
+            return navigator.serviceWorker.register("./sw.js");
+          })
+          .catch((err) => {
+            console.warn("ServiceWorker registration fallback failed:", err);
+          });
+      };
+
+      if (document.readyState === "complete") {
+        registerSW();
+      } else {
+        window.addEventListener("load", registerSW);
+      }
     }
   </script>
 </body>

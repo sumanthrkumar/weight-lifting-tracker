@@ -3707,6 +3707,12 @@ class WorkoutApp {
 }
 
 const app = new WorkoutApp();
-document.addEventListener("DOMContentLoaded", () => {
+window.app = app;
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => {
+    app.init();
+  });
+} else {
   app.init();
-});
+}

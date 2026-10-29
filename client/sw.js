@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v26";
+const CACHE_NAME = "workout-tracker-v27";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
@@ -23,9 +23,21 @@ function fetchWithTimeout(request, timeoutMs = 2500) {
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.addAll(ASSETS_TO_CACHE);
+
+      // Explicitly cache HTML shell under all common root and app entry routes
+      const htmlResponse = await cache.match("./index.html");
+      if (htmlResponse) {
+        await Promise.all([
+          cache.put("/", htmlResponse.clone()),
+          cache.put("/app", htmlResponse.clone()),
+          cache.put("/app/", htmlResponse.clone()),
+          cache.put("/app/index.html", htmlResponse.clone())
+        ]);
+      }
+    })()
   );
   self.skipWaiting();
 });
@@ -73,8 +85,12 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const cached =
           (await caches.match(event.request)) ||
+          (await caches.match("/app/index.html")) ||
+          (await caches.match("/app/")) ||
+          (await caches.match("/app")) ||
           (await caches.match("./index.html")) ||
-          (await caches.match("./"));
+          (await caches.match("./")) ||
+          (await caches.match("/"));
 
         if (cached) {
           // Revalidate in background if server is online without blocking page load
@@ -83,6 +99,7 @@ self.addEventListener("fetch", (event) => {
               if (networkResponse && networkResponse.status === 200) {
                 const cache = await caches.open(CACHE_NAME);
                 await cache.put(event.request, networkResponse.clone());
+                await cache.put("/app/index.html", networkResponse.clone());
                 await cache.put("./index.html", networkResponse);
               }
             })
@@ -96,11 +113,18 @@ self.addEventListener("fetch", (event) => {
           if (networkResponse && networkResponse.status === 200) {
             const cache = await caches.open(CACHE_NAME);
             cache.put(event.request, networkResponse.clone());
+            cache.put("/app/index.html", networkResponse.clone());
             cache.put("./index.html", networkResponse.clone());
           }
           return networkResponse;
         } catch (err) {
-          const fallback = (await caches.match("./index.html")) || (await caches.match("./"));
+          const fallback =
+            (await caches.match("/app/index.html")) ||
+            (await caches.match("/app/")) ||
+            (await caches.match("/app")) ||
+            (await caches.match("./index.html")) ||
+            (await caches.match("./")) ||
+            (await caches.match("/"));
           if (fallback) return fallback;
           throw err;
         }
@@ -112,7 +136,16 @@ self.addEventListener("fetch", (event) => {
   // Static assets: Cache-first with background revalidation
   event.respondWith(
     (async () => {
-      const cached = await caches.match(event.request);
+      let cached = await caches.match(event.request);
+      if (!cached) {
+        const filename = url.pathname.split("/").pop();
+        if (filename) {
+          cached =
+            (await caches.match(`./${filename}`)) ||
+            (await caches.match(`/app/${filename}`));
+        }
+      }
+
       if (cached) {
         // Background revalidation
         fetchWithTimeout(event.request, 2500)
@@ -135,7 +168,11 @@ self.addEventListener("fetch", (event) => {
         }
         return networkResponse;
       } catch (err) {
-        const fallback = await caches.match(event.request);
+        const filename = url.pathname.split("/").pop();
+        const fallback =
+          (await caches.match(event.request)) ||
+          (filename ? await caches.match(`./${filename}`) : null) ||
+          (filename ? await caches.match(`/app/${filename}`) : null);
         if (fallback) return fallback;
         throw err;
       }

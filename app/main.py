@@ -1,6 +1,6 @@
 import uuid
 from fastapi import FastAPI, Depends, HTTPException, status
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -17,6 +17,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Service Worker endpoints with root scope authorization
+@app.api_route("/sw.js", methods=["GET", "HEAD"], include_in_schema=False)
+def get_root_service_worker():
+    return FileResponse(
+        "client/sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"}
+    )
+
+@app.api_route("/app/sw.js", methods=["GET", "HEAD"], include_in_schema=False)
+def get_app_service_worker():
+    return FileResponse(
+        "client/sw.js",
+        media_type="application/javascript",
+        headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache"}
+    )
 
 # GET /server-info - Return current environment and database isolation details
 @app.get("/server-info")
