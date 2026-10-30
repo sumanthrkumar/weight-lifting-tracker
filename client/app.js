@@ -1096,8 +1096,13 @@ class WorkoutApp {
           }
 
           const count = syncResult?.syncedCount || 0;
-          if (count > 0) {
+          const purged = pullResult?.purgedCount || 0;
+          if (count > 0 && purged > 0) {
+            this.showToast(`Synced ${count} workout${count === 1 ? "" : "s"} and removed ${purged} deleted`, "success", 2500);
+          } else if (count > 0) {
             this.showToast(`Synced ${count} workout${count === 1 ? "" : "s"} to database`, "success", 2500);
+          } else if (purged > 0) {
+            this.showToast(`Synced with database (removed ${purged} deleted workout${purged === 1 ? "" : "s"})`, "success", 2500);
           } else {
             this.showToast("Database already up to date", "info", 2000);
           }
@@ -1992,7 +1997,7 @@ class WorkoutApp {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
-      }, 2500);
+      }, 10000);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -3231,7 +3236,7 @@ class WorkoutApp {
   }
 
   // Display insights for the selected workout
-  async displaySelectedWorkoutInsights(sessionId) {
+  async displaySelectedWorkoutInsights(sessionId, forceRefresh = false) {
     const actionCard = document.getElementById("insights-action-card");
     const titleEl = document.getElementById("insights-selected-title");
     const metaEl = document.getElementById("insights-selected-meta");
@@ -3262,8 +3267,8 @@ class WorkoutApp {
       metaEl.textContent = `${dateDisplay} • ${totalExercises} exercise${totalExercises !== 1 ? "s" : ""} • ${totalSets} set${totalSets !== 1 ? "s" : ""}`;
     }
 
-    // Reuse cached insights only if the workout has not changed since they were generated
-    if (fullSession.ai_insights && fullSession.ai_insights_signature === this.computeInsightsSignature(fullSession)) {
+    // Reuse cached insights only if not forcing refresh, not a local fallback, and workout signature matches
+    if (!forceRefresh && fullSession.ai_insights && !fullSession.ai_insights._is_fallback && fullSession.ai_insights_signature === this.computeInsightsSignature(fullSession)) {
       this.renderInsightsContent(fullSession.ai_insights, fullSession);
       return;
     }
@@ -3279,7 +3284,7 @@ class WorkoutApp {
     }
 
     // Automatically trigger analysis for this workout
-    await this.runWorkoutAIInsights(sessionId, false);
+    await this.runWorkoutAIInsights(sessionId, forceRefresh);
   }
 
   // Execute AI analysis via API or local deterministic engine
@@ -3349,10 +3354,10 @@ class WorkoutApp {
     let insights = null;
     let engineSource = "Cloud Coach";
 
-    // Attempt server request (time-boxed so the UI never hangs)
+    // Attempt server request (time-boxed with 15s timeout for AI inference)
     if (navigator.onLine) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
       try {
         const res = await fetch(`${API_BASE_URL}/coach/workout`, {
           method: "POST",
@@ -3362,6 +3367,8 @@ class WorkoutApp {
         });
         if (res.ok) {
           insights = await res.json();
+          insights._source = "Gemini Strength Engine";
+          insights._is_fallback = false;
           engineSource = "Gemini Strength Engine";
         }
       } catch (err) {
@@ -3374,6 +3381,8 @@ class WorkoutApp {
     // Local deterministic fallback engine
     if (!insights) {
       insights = this.generateLocalWorkoutInsights(fullSession);
+      insights._source = "Local Strength Engine";
+      insights._is_fallback = true;
       engineSource = "Local Strength Engine";
     }
 
@@ -3541,6 +3550,10 @@ class WorkoutApp {
   // Render the generated AI insights into stunning HTML components
   renderInsightsContent(insights, fullSession) {
     const container = document.getElementById("insights-results-container");
+    const engineBadge = document.getElementById("ai-engine-status");
+    if (engineBadge && insights._source) {
+      engineBadge.textContent = insights._source;
+    }
     if (!container) return;
 
     // 1. Session Assessment & Workout Notes Feedback

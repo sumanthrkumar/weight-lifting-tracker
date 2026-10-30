@@ -182,11 +182,14 @@ class SyncManager {
         return new Date(s).getTime();
       };
 
-      const serverSessionIds = new Set(sessions.map((s) => s.id));
+      const normId = (id) => String(id || "").replace(/-/g, "").toLowerCase();
+      const serverSessionIds = new Set(sessions.map((s) => normId(s.id)));
+      let purgedCount = 0;
 
       // Synchronize database deletions: remove local completed sessions that were deleted on the server
       for (const ls of localSessions) {
-        if (ls.status === "completed" && !serverSessionIds.has(ls.id) && !ls.offline_pending) {
+        const localNormId = normId(ls.id);
+        if (ls.status === "completed" && !serverSessionIds.has(localNormId) && !ls.offline_pending) {
           await this.db.delete("workout_sessions", ls.id);
           const oldLogs = await this.db.getByIndex("exercise_logs", "workout_session_id", ls.id);
           for (const ol of oldLogs) {
@@ -196,6 +199,7 @@ class SyncManager {
               await this.db.delete("set_entries", os.id);
             }
           }
+          purgedCount++;
         }
       }
 
@@ -268,7 +272,7 @@ class SyncManager {
       }
 
       window.dispatchEvent(new CustomEvent("workout-sync-complete"));
-      return { success: true, reachable: true, count: sessions.length };
+      return { success: true, reachable: true, count: sessions.length, purgedCount };
     } catch (error) {
       this.serverReachable = false;
       this.updateStatusBadge();

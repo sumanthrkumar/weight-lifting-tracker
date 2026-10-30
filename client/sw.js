@@ -1,4 +1,4 @@
-const CACHE_NAME = "workout-tracker-v34";
+const CACHE_NAME = "workout-tracker-v35";
 const ASSETS_TO_CACHE = [
   "/app/",
   "/app/index.html",
@@ -143,7 +143,39 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static assets: Cache-first with background revalidation
+  // For code assets (JS, CSS, HTML), use Network-First with Cache Fallback so updates are instant online
+  const isCodeAsset = /\.(js|css|html)$/i.test(url.pathname);
+  if (isCodeAsset) {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetchWithTimeout(event.request, 2000);
+          if (networkResponse && networkResponse.status === 200) {
+            const cache = await caches.open(CACHE_NAME);
+            cache.put(event.request, networkResponse.clone());
+            return networkResponse;
+          }
+        } catch {
+          // Network failed or timed out: fall back to cache
+        }
+
+        let cached = await caches.match(event.request);
+        if (!cached) {
+          const filename = url.pathname.split("/").pop();
+          if (filename) {
+            cached =
+              (await caches.match(`./${filename}`)) ||
+              (await caches.match(`/app/${filename}`));
+          }
+        }
+        if (cached) return cached;
+        throw new Error("Asset unavailable offline");
+      })()
+    );
+    return;
+  }
+
+  // Static media assets (images, audio): Cache-first with background revalidation
   event.respondWith(
     (async () => {
       let cached = await caches.match(event.request);

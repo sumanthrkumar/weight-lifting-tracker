@@ -78,17 +78,35 @@ def generate_exercise_feedback(payload: schemas.CoachExerciseFeedbackRequest) ->
             "Evaluate the lifter's fatigue, suggest next set weight/reps, and give a concise coaching cue."
         )
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=schemas.CoachExerciseFeedbackResponse,
-                temperature=0.3,
-            ),
-        )
-        return response.parsed
+        CANDIDATE_MODELS = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-2.5-flash",
+        ]
+
+        last_error = None
+        for model_name in CANDIDATE_MODELS:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json",
+                        response_schema=schemas.CoachExerciseFeedbackResponse,
+                        temperature=0.3,
+                    ),
+                )
+                if response.parsed:
+                    print(f"[EXERCISE COACH SUCCESS] Model {model_name} generated response", flush=True)
+                    return response.parsed
+            except Exception as model_err:
+                last_error = model_err
+                print(f"[EXERCISE COACH RETRY] Model {model_name} failed: {model_err}", flush=True)
+                continue
+
+        raise last_error or RuntimeError("All candidate models failed")
     except Exception as e:
         print(f"[EXERCISE COACH FALLBACK] {e}", flush=True)
         return generate_deterministic_exercise_feedback(payload)
@@ -280,17 +298,35 @@ def generate_workout_feedback(payload: schemas.CoachWorkoutFeedbackRequest) -> s
             "5. Strain rating, highlights, and recovery guidance."
         )
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_instruction,
-                response_mime_type="application/json",
-                response_schema=schemas.CoachWorkoutFeedbackResponse,
-                temperature=0.3,
-            ),
-        )
-        return response.parsed
+        CANDIDATE_MODELS = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.5-flash",
+            "gemini-3.6-flash",
+            "gemini-2.5-flash",
+        ]
+
+        last_error = None
+        for model_name in CANDIDATE_MODELS:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_instruction,
+                        response_mime_type="application/json",
+                        response_schema=schemas.CoachWorkoutFeedbackResponse,
+                        temperature=0.3,
+                    ),
+                )
+                if response.parsed:
+                    print(f"[WORKOUT COACH SUCCESS] Model {model_name} generated response", flush=True)
+                    return response.parsed
+            except Exception as model_err:
+                last_error = model_err
+                print(f"[WORKOUT COACH RETRY] Model {model_name} failed: {model_err}", flush=True)
+                continue
+
+        raise last_error or RuntimeError("All candidate models failed")
     except Exception as e:
         print(f"[WORKOUT COACH FALLBACK] Activating deterministic coach: {e}", flush=True)
         return generate_deterministic_workout_feedback(payload)
